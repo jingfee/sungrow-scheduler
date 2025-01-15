@@ -1,3 +1,10 @@
 export interface Message {
-  time: string;
+  operation: Operation;
+  chargeHours?: number;
+  targetSoc?: number;
+}
+
+export enum Operation {
+  StartCharge,
+  StopCharge,
 }
