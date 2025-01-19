@@ -5,17 +5,27 @@ export interface Price {
   time: string;
 }
 
-export async function getPrices(date: DateTime): Promise<Price[]> {
-  const prices = await fetchPrices(date);
-
-  const mapped_prices = [];
-  for (const price of prices) {
-    mapped_prices.push({
+export async function getPrices(): Promise<Price[]> {
+  const today = DateTime.now().setZone('Europe/Stockholm');
+  const tomorrow = today.plus({ days: 1 });
+  const priceToday = await fetchPrices(today);
+  const priceTomorrow = await fetchPrices(tomorrow);
+  const prices = [];
+  for (const price of priceToday) {
+    prices.push({
       price: price.SEK_per_kWh,
       time: price.time_start,
     });
   }
-  return mapped_prices;
+  if (priceTomorrow) {
+    for (const price of priceTomorrow) {
+      prices.push({
+        price: price.SEK_per_kWh,
+        time: price.time_start,
+      });
+    }
+  }
+  return prices;
 }
 
 async function fetchPrices(date: DateTime) {

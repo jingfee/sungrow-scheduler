@@ -1,10 +1,12 @@
 export interface Message {
   operation: Operation;
-  chargeHours?: number;
+  power?: number;
   targetSoc?: number;
 }
 
 export enum Operation {
   StartCharge,
   StopCharge,
+  StartDischarge,
+  StopDischarge,
 }

@@ -34,7 +34,7 @@ async function login() {
   }
 }
 
-export async function get_battery_soc() {
+export async function getBatterySoc() {
   if (!token) {
     await login();
   }
@@ -58,6 +58,170 @@ export async function get_battery_soc() {
     const soc =
       responseJson?.result_data?.device_point_list[0].device_point.p13141;
     return soc;
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function setStartBatteryCharge(power: number, targetSoc: number) {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/paramSetting`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    set_type: 0,
+    uuid: process.env['DeviceUuid'],
+    task_name: 'test',
+    expire_second: 1800,
+    param_list: [
+      {
+        param_code: 10001,
+        set_value: targetSoc * 10,
+      },
+      {
+        param_code: 10003,
+        set_value: 2,
+      },
+      {
+        param_code: 10004,
+        set_value: 170,
+      },
+      {
+        param_code: 10005,
+        set_value: power,
+      },
+    ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    await fetch(url, options);
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function setStopBatteryCharge() {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/paramSetting`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    set_type: 0,
+    uuid: process.env['DeviceUuid'],
+    task_name: 'test',
+    expire_second: 1800,
+    param_list: [
+      {
+        param_code: 10003,
+        set_value: 0,
+      },
+      {
+        param_code: 10004,
+        set_value: 204,
+      },
+      {
+        param_code: 10005,
+        set_value: 0,
+      },
+    ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    await fetch(url, options);
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function setStartBatteryDischarge() {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/paramSetting`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    set_type: 0,
+    uuid: process.env['DeviceUuid'],
+    task_name: 'test',
+    expire_second: 1800,
+    param_list: [
+      {
+        param_code: 10003,
+        set_value: 2,
+      },
+      {
+        param_code: 10004,
+        set_value: 187,
+      },
+      {
+        param_code: 10005,
+        set_value: 6000,
+      },
+      {
+        param_code: 10012,
+        set_value: 170,
+      },
+      {
+        param_code: 10013,
+        set_value: 0,
+      },
+    ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    await fetch(url, options);
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function setStopBatteryDischarge() {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/paramSetting`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    set_type: 0,
+    uuid: process.env['DeviceUuid'],
+    task_name: 'test',
+    expire_second: 1800,
+    param_list: [
+      {
+        param_code: 10003,
+        set_value: 0,
+      },
+      {
+        param_code: 10004,
+        set_value: 204,
+      },
+      {
+        param_code: 10005,
+        set_value: 0,
+      },
+      {
+        param_code: 10012,
+        set_value: 85,
+      },
+    ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    await fetch(url, options);
   } catch (error: any) {
     console.error(error.message);
   }
