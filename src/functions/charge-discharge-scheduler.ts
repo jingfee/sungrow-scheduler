@@ -5,78 +5,56 @@ import {
   InvocationContext,
   Timer,
 } from '@azure/functions';
-import { getPrices, Price } from '../prices';
+import { getNightChargeHours, getPrices, Price } from '../prices';
 import { Message, Operation } from '../message';
-import { clearAllMessages, enqueue } from '../service-bus';
+import { enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
-import {
-  setStartBatteryCharge,
-  setStartBatteryDischarge,
-  setStopBatteryCharge,
-  setStopBatteryDischarge,
-} from '../sungrow-api';
 
-export async function scheduler(
+export async function chargeDischargeSchedule(
   myTimer: Timer,
   context: InvocationContext
 ): Promise<void> {
   await handleFunction(context);
 }
 
-export async function schedulerhttp(
+export async function chargeDischargeScheduleHttp(
   request: HttpRequest,
   context: InvocationContext
 ): Promise<HttpResponseInit> {
   await handleFunction(context);
-  return { body: 'Created queue item.' };
+  return { body: 'Schedule complete' };
 }
 
 async function handleFunction(context: InvocationContext) {
-  // monitor-prices - at 14:30
-  //1. check prices after publish
-  //  check if avg of todays 15:00-22:00 most expensive hours are at least 30 öre more expensive than avg of tomorrow 00:00-06:00 5 cheapest hours
-  //  if not remove rest of discharge
-  //  peek messages - remove discharge messages
-  //
-  //
-  // discharge-leftover - at 20:00, 21:00
-  //5. check leftover charge
-  //  if battery level > 25 and current price is at least 50 öre more expensive than avg of 2 cheapest night hours, add discharge schedule for next hour
-  //
-  //
-  //  when message from bus
-  //  if charge
-  //  set with api - compulsory, force charge, targetsoc, charge power
-  //  chargepower based on target soc - current soc and number of charge hours, max 4 kw
-  //  if stop charge
-  //  set with api - self-consumption, force charge off
-  //  if discharge
-  //  set with api - discharge schedule now to next hour
-
-  await clearAllMessages();
+  const messages: Record<string, Message> = {};
   const prices = await getPrices();
-  const skipDayDischarge = await setNightCharging(prices);
-  if (skipDayDischarge) {
-    return;
+  const skipDayDischarge = await setNightCharging(prices, messages);
+  if (!skipDayDischarge) {
+    const hasDayCharge = await setDayChargeAndDischarge(prices, messages);
+    if (!hasDayCharge) {
+      await setDayDischarge(prices, messages);
+    }
   }
-  const hasDayCharge = await setDayChargeAndDischarge(prices);
-  if (hasDayCharge) {
-    return;
+
+  for (const [time, message] of Object.entries(messages)) {
+    await enqueue(message, DateTime.fromISO(time));
   }
-  await setDayDischarge(prices);
 }
 
-/*app.timer('charge-discharge', {
-  schedule: '21 0 0 * * *',
-  handler: scheduler,
-});*/
-
-app.http('scheduler-debug', {
-  methods: ['GET'],
-  handler: schedulerhttp,
+app.timer('charge-discharge-schedule', {
+  schedule: '0 0 20 * * *',
+  handler: chargeDischargeSchedule,
 });
 
-async function setNightCharging(prices: Price[]) {
+app.http('charge-discharge-schedule-debug', {
+  methods: ['GET'],
+  handler: chargeDischargeScheduleHttp,
+});
+
+async function setNightCharging(
+  prices: Price[],
+  messages: Record<string, Message>
+) {
   //  find cheapest 2, 3 and 4 hours between 22:00 - 06:00
   //  if avg4 is less than 10 öre, always charge 4 hours
   //  else
@@ -89,134 +67,45 @@ async function setNightCharging(prices: Price[]) {
   //  targetsoc 100% if saturday -> sunday
   //  targetsoc 99% if diff most expensive and cheapest hour is more than 75 öre
   //  targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
-  //  add message to bus to charge at cheapest hours, targetsoc according to above, chargehours
-  //  add message to bus to stop charge selected hours after each hour (if not continous charging)
+
   const chargingHoursPower = {
-    2: 4000,
-    3: 3100,
-    4: 2400,
+    2: 3800,
+    3: 2900,
+    4: 2200,
   };
-  let isCheapNightCharging = false;
-  let skipDayDischarge = false;
-  let chargingHours = 0;
-  let targetSoc = 0;
-  const now = DateTime.now();
+  const [chargeHours, targetSoc, skipDayDischarge] =
+    getNightChargeHours(prices);
 
-  const sortedHours = prices
-    .slice(22, 30) // 22:00 to 06:00 next day
-    .sort((a, b) => (a.price > b.price ? 1 : -1));
+  for (const [index, chargeHour] of chargeHours.entries()) {
+    const currDate = DateTime.fromISO(chargeHour.time);
+    const prevDate =
+      index === 0 ? undefined : DateTime.fromISO(chargeHours[index - 1].time);
+    const nextDate =
+      index === chargeHours.length - 1
+        ? undefined
+        : DateTime.fromISO(chargeHours[index + 1].time);
 
-  const nightlyMeans = {
-    2: sortedHours.slice(0, 2).reduce((a, b) => a + b.price, 0) / 2,
-    3: sortedHours.slice(0, 3).reduce((a, b) => a + b.price, 0) / 3,
-    4: sortedHours.slice(0, 4).reduce((a, b) => a + b.price, 0) / 4,
-    5: sortedHours.slice(0, 5).reduce((a, b) => a + b.price, 0) / 5,
-    6: sortedHours.slice(0, 6).reduce((a, b) => a + b.price, 0) / 6,
-    7: sortedHours.slice(0, 7).reduce((a, b) => a + b.price, 0) / 7,
-    8: sortedHours.slice(0, 8).reduce((a, b) => a + b.price, 0) / 8,
-  };
+    if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
+      messages[DateTime.fromISO(chargeHour.time).toISO()] = {
+        operation: Operation.StartCharge,
+        power: chargingHoursPower[chargeHours.length],
+        targetSoc,
+      } as Message;
+    }
 
-  // Price during night is cheap - charge for 3 hours no matter what
-  if (nightlyMeans[3] < 0.1) {
-    chargingHours = 3;
-    isCheapNightCharging = true;
+    if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
+      messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] = {
+        operation: Operation.StopCharge,
+      } as Message;
+    }
   }
-
-  const tomorrowMostExpensiveMean =
-    prices
-      .slice(24) // 00:00 to 23:00 next day
-      .sort((a, b) => (a.price < b.price ? 1 : -1))
-      .slice(0, 4)
-      .reduce((a, b) => a + b.price, 0) / 4;
-
-  // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
-  if (tomorrowMostExpensiveMean - nightlyMeans[2] < 0.3) {
-    // if we charge during night due to low prices set soc to 80%
-    if (isCheapNightCharging) {
-      targetSoc = 80;
-      // else set soc to 50% and 2 charging hours to keep a backup in case of outage
-    } else {
-      targetSoc = 50;
-      chargingHours = 2;
-    }
-    skipDayDischarge = true;
-  } else {
-    // small diff during night - charge 4 hours
-    if (nightlyMeans[4] - nightlyMeans[2] < 0.1) {
-      chargingHours = 4;
-      // mid diff during night - charge 3 hours
-    } else if (nightlyMeans[3] - nightlyMeans[2] < 0.05) {
-      chargingHours = 3;
-      // higher diff during night - charge 2 hours
-    } else {
-      chargingHours = 2;
-    }
-
-    // charge to 100% saturday -> sunday
-    if (now.weekday === 6) {
-      targetSoc = 100;
-    } else {
-      const meanCheapest =
-        prices
-          .slice(24)
-          .sort((a, b) => (a.price > b.price ? 1 : -1))
-          .slice(0, 3)
-          .reduce((a, b) => a + b.price, 0) / 3;
-      const meanMostExpensive =
-        prices
-          .slice(24)
-          .sort((a, b) => (a.price < b.price ? 1 : -1))
-          .slice(0, 7)
-          .reduce((a, b) => a + b.price, 0) / 7;
-
-      const diffLowHighPrice = meanMostExpensive - meanCheapest;
-
-      if (diffLowHighPrice > 0.75) {
-        targetSoc = 99;
-      } else {
-        targetSoc = 98;
-      }
-    }
-
-    const chargeHours = sortedHours
-      .slice(0, chargingHours)
-      .sort((a, b) => (a.time > b.time ? 1 : -1));
-    for (const [index, chargeHour] of chargeHours.entries()) {
-      const currDate = DateTime.fromISO(chargeHour.time);
-      const prevDate =
-        index === 0 ? undefined : DateTime.fromISO(chargeHours[index - 1].time);
-      const nextDate =
-        index === chargeHours.length - 1
-          ? undefined
-          : DateTime.fromISO(chargeHours[index + 1].time);
-
-      if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
-        await enqueue(
-          {
-            operation: Operation.StartCharge,
-            power: chargingHoursPower[chargingHours],
-            targetSoc,
-          } as Message,
-          DateTime.fromISO(chargeHour.time),
-          false
-        );
-      }
-
-      if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
-        await enqueue(
-          {
-            operation: Operation.StopCharge,
-          } as Message,
-          DateTime.fromISO(chargeHour.time).plus({ hours: 1 }),
-          false
-        );
-      }
-    }
-    return skipDayDischarge;
-  }
+  return skipDayDischarge;
 }
 
-async function setDayChargeAndDischarge(prices: Price[]) {
+async function setDayChargeAndDischarge(
+  prices: Price[],
+  messages: Record<string, Message>
+) {
   //    find cheapest hour between 10:00-16:00
   //    check hours from 06:00 up to cheapest hour, check hours from cheapest hour to 22:00
   //    check if at least 2 hours before and after thats at least 30 öre more expensive
@@ -243,22 +132,16 @@ async function setDayChargeAndDischarge(prices: Price[]) {
     return false;
   }
 
-  await enqueue(
-    {
-      operation: Operation.StartCharge,
-      power: 5000,
-      targetSoc: 90,
-    } as Message,
-    DateTime.fromISO(cheapestDayPrice.time),
-    false
-  );
-  await enqueue(
+  messages[DateTime.fromISO(cheapestDayPrice.time).toISO()] = {
+    operation: Operation.StartCharge,
+    power: 5000,
+    targetSoc: 90,
+  } as Message;
+
+  messages[DateTime.fromISO(cheapestDayPrice.time).plus({ hours: 1 }).toISO()] =
     {
       operation: Operation.StopCharge,
-    } as Message,
-    DateTime.fromISO(cheapestDayPrice.time).plus({ hours: 1 }),
-    false
-  );
+    } as Message;
 
   const dischargeHours = [
     ...moreExpensiveBefore
@@ -281,29 +164,23 @@ async function setDayChargeAndDischarge(prices: Price[]) {
         : DateTime.fromISO(dischargeHours[index + 1].time);
 
     if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
-      await enqueue(
-        {
-          operation: Operation.StartDischarge,
-        } as Message,
-        DateTime.fromISO(dischargeHour.time),
-        true
-      );
+      messages[DateTime.fromISO(dischargeHour.time).toISO()] = {
+        operation: Operation.StartDischarge,
+      } as Message;
     }
 
     if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
-      await enqueue(
-        {
-          operation: Operation.StopDischarge,
-        } as Message,
-        DateTime.fromISO(dischargeHour.time).plus({ hours: 1 }),
-        false
-      );
+      messages[
+        DateTime.fromISO(dischargeHour.time).plus({ hours: 1 }).toISO()
+      ] = {
+        operation: Operation.StopDischarge,
+      } as Message;
     }
   }
   return true;
 }
 
-async function setDayDischarge(prices) {
+async function setDayDischarge(prices, messages: Record<string, Message>) {
   //  find 4 most expensive hours between 06:00-22:00
   //  add message to bus to discharge at most expensive hours
 
@@ -324,23 +201,17 @@ async function setDayDischarge(prices) {
         : DateTime.fromISO(dischargeHours[index + 1].time);
 
     if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
-      await enqueue(
-        {
-          operation: Operation.StartDischarge,
-        } as Message,
-        DateTime.fromISO(dischargeHour.time),
-        true
-      );
+      messages[DateTime.fromISO(dischargeHour.time).toISO()] = {
+        operation: Operation.StartDischarge,
+      } as Message;
     }
 
     if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
-      await enqueue(
-        {
-          operation: Operation.StopDischarge,
-        } as Message,
-        DateTime.fromISO(dischargeHour.time).plus({ hours: 1 }),
-        false
-      );
+      messages[
+        DateTime.fromISO(dischargeHour.time).plus({ hours: 1 }).toISO()
+      ] = {
+        operation: Operation.StopDischarge,
+      } as Message;
     }
   }
 }

@@ -3,8 +3,7 @@ import { Message, Operation } from '../message';
 import {
   setStartBatteryCharge,
   setStartBatteryDischarge,
-  setStopBatteryCharge,
-  setStopBatteryDischarge,
+  setStopBatteryChargeDischarge,
 } from '../sungrow-api';
 
 const serviceBusName = 'battery-queue';
@@ -17,11 +16,11 @@ export async function serviceBusTrigger(
     case Operation.StartCharge:
       await setStartBatteryCharge(message.power, message.targetSoc);
     case Operation.StopCharge:
-      await setStopBatteryCharge();
+      await setStopBatteryChargeDischarge();
     case Operation.StartDischarge:
       await setStartBatteryDischarge();
     case Operation.StopDischarge:
-      await setStopBatteryDischarge();
+      await setStopBatteryChargeDischarge();
   }*/
 }
 

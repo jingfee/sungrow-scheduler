@@ -1,64 +1,47 @@
-import { ServiceBusClient, ServiceBusMessage } from '@azure/service-bus';
-import { Message } from './message';
+import {
+  ServiceBusClient,
+  ServiceBusMessage,
+  ServiceBusReceivedMessage,
+} from '@azure/service-bus';
+import { Message, Operation } from './message';
 import { DateTime } from 'luxon';
 
 const serviceBusName = 'battery-queue';
 const connectionString = process.env['ServiceBusConnectionString'];
 
-export async function enqueue(
-  message: Message,
-  scheduleTime: DateTime,
-  clearMessages: boolean
-) {
-  if (clearMessages) {
-    await clearMessageAtTime(scheduleTime);
-  }
+const _client = new ServiceBusClient(connectionString);
+const _sender = _client.createSender(serviceBusName);
+const _receiver = _client.createReceiver(serviceBusName);
 
-  const client = new ServiceBusClient(connectionString);
-  const sender = client.createSender(serviceBusName);
-  try {
-    const sbMessage = { body: message } as ServiceBusMessage;
-    await sender.scheduleMessages(sbMessage, new Date(scheduleTime.toString()));
-  } finally {
-    sender.close();
-    client.close();
-  }
+export async function enqueue(message: Message, scheduleTime: DateTime) {
+  const sbMessage = { body: message } as ServiceBusMessage;
+  await _sender.scheduleMessages(sbMessage, new Date(scheduleTime.toString()));
 }
 
 export async function clearAllMessages() {
-  const client = new ServiceBusClient(connectionString);
-  const receiver = client.createReceiver(serviceBusName);
-  const sender = client.createSender(serviceBusName);
-  try {
-    const peekedMessages = await receiver.peekMessages(100);
-    for (const peekedMessage of peekedMessages) {
-      await sender.cancelScheduledMessages(peekedMessage.sequenceNumber);
-    }
-  } finally {
-    receiver.close();
-    sender.close();
-    client.close();
+  const sender = _client.createSender(serviceBusName);
+  const peekedMessages = await _receiver.peekMessages(100);
+  for (const peekedMessage of peekedMessages) {
+    await sender.cancelScheduledMessages(peekedMessage.sequenceNumber);
   }
 }
 
-async function clearMessageAtTime(time: DateTime) {
-  const client = new ServiceBusClient(connectionString);
-  const receiver = client.createReceiver(serviceBusName);
-  const sender = client.createSender(serviceBusName);
-  try {
-    const peekedMessages = await receiver.peekMessages(100);
-    for (const peekedMessage of peekedMessages) {
-      if (
-        DateTime.fromJSDate(
-          peekedMessage.scheduledEnqueueTimeUtc
-        ).toMillis() === DateTime.fromISO(time).toMillis()
-      ) {
-        await sender.cancelScheduledMessages(peekedMessage.sequenceNumber);
-      }
+export async function getDischargeMessages(): Promise<
+  ServiceBusReceivedMessage[]
+> {
+  const dischargeMessages = [];
+  const peekedMessages = await _receiver.peekMessages(100);
+  for (const peekedMessage of peekedMessages) {
+    if (
+      (peekedMessage.body as Message).operation === Operation.StartDischarge ||
+      (peekedMessage.body as Message).operation === Operation.StopDischarge
+    ) {
+      dischargeMessages.push(peekedMessage);
     }
-  } finally {
-    receiver.close();
-    sender.close();
-    client.close();
   }
+  return dischargeMessages;
+}
+
+export async function clearMessage(sequenceNumber) {
+  await _sender.cancelScheduledMessages(sequenceNumber);
 }

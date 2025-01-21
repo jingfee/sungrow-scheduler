@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 const baseUrl = 'https://gateway.isolarcloud.eu/openapi';
 let token;
 const baseOptions = {
@@ -74,23 +76,23 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: 'test',
+    task_name: `${DateTime.now().toISO()} Set start battery charge`,
     expire_second: 1800,
     param_list: [
       {
-        param_code: 10001,
+        param_code: 10001, //soc upper limit
         set_value: targetSoc * 10,
       },
       {
-        param_code: 10003,
-        set_value: 2,
+        param_code: 10003, //energy management mode
+        set_value: 2, //compulsory mode
       },
       {
-        param_code: 10004,
-        set_value: 170,
+        param_code: 10004, //charging/discharing command
+        set_value: 170, //charging
       },
       {
-        param_code: 10005,
+        param_code: 10005, //charging/discharing power
         set_value: power,
       },
     ],
@@ -104,7 +106,7 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
   }
 }
 
-export async function setStopBatteryCharge() {
+export async function setStopBatteryChargeDischarge() {
   if (!token) {
     await login();
   }
@@ -115,19 +117,19 @@ export async function setStopBatteryCharge() {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: 'test',
+    task_name: `${DateTime.now().toISO()} Set stop battery charge-discharge`,
     expire_second: 1800,
     param_list: [
       {
-        param_code: 10003,
-        set_value: 0,
+        param_code: 10003, //energy management mode
+        set_value: 2, //compulsory mode
       },
       {
-        param_code: 10004,
-        set_value: 204,
+        param_code: 10004, //charging/discharging command
+        set_value: 204, //stopped
       },
       {
-        param_code: 10005,
+        param_code: 10005, //charging/discharging power
         set_value: 0,
       },
     ],
@@ -152,69 +154,12 @@ export async function setStartBatteryDischarge() {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: 'test',
+    task_name: `${DateTime.now().toISO()} Set start battery discharge`,
     expire_second: 1800,
     param_list: [
       {
-        param_code: 10003,
-        set_value: 2,
-      },
-      {
-        param_code: 10004,
-        set_value: 187,
-      },
-      {
-        param_code: 10005,
-        set_value: 6000,
-      },
-      {
-        param_code: 10012,
-        set_value: 170,
-      },
-      {
-        param_code: 10013,
-        set_value: 0,
-      },
-    ],
-  });
-  const options = { ...baseOptions, body };
-
-  try {
-    await fetch(url, options);
-  } catch (error: any) {
-    console.error(error.message);
-  }
-}
-
-export async function setStopBatteryDischarge() {
-  if (!token) {
-    await login();
-  }
-
-  const url = `${baseUrl}/paramSetting`;
-  const body = JSON.stringify({
-    ...baseBody,
-    token,
-    set_type: 0,
-    uuid: process.env['DeviceUuid'],
-    task_name: 'test',
-    expire_second: 1800,
-    param_list: [
-      {
-        param_code: 10003,
-        set_value: 0,
-      },
-      {
-        param_code: 10004,
-        set_value: 204,
-      },
-      {
-        param_code: 10005,
-        set_value: 0,
-      },
-      {
-        param_code: 10012,
-        set_value: 85,
+        param_code: 10003, //energy management mode
+        set_value: 0, //self-consumption
       },
     ],
   });
