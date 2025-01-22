@@ -12,7 +12,7 @@ export async function serviceBusTrigger(
   message: Message,
   context: InvocationContext
 ): Promise<void> {
-  /*switch (message.operation) {
+  switch (message.operation) {
     case Operation.StartCharge:
       await setStartBatteryCharge(message.power, message.targetSoc);
     case Operation.StopCharge:
@@ -21,7 +21,7 @@ export async function serviceBusTrigger(
       await setStartBatteryDischarge();
     case Operation.StopDischarge:
       await setStopBatteryChargeDischarge();
-  }*/
+  }
 }
 
 app.serviceBusQueue('service-bus-trigger', {
