@@ -36,7 +36,7 @@ export async function handleFunction(context: InvocationContext) {
     return;
   }
 
-  const [chargingHours, ,] = getNightChargeHours(prices);
+  const [chargingHours, ,] = getNightChargeHours(prices, false);
   const chargingHoursMean =
     chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
 

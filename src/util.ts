@@ -5,13 +5,13 @@ import { DateTime } from 'luxon';
 export const SEK_THRESHOLD = parseFloat(process.env['SEK_THRESHOLD']);
 
 export function getNightChargeHours(
-  prices: Price[]
+  prices: Price[],
+  shouldBalanceBatteryUpper: boolean
 ): [Price[], number, boolean] {
   let isCheapNightCharging = false;
   let skipDayDischarge = false;
   let chargingHours = 0;
   let targetSoc = 0;
-  const now = DateTime.now();
 
   const sortedHours = prices
     .slice(22, 30) // 22:00 to 06:00 next day
@@ -44,7 +44,7 @@ export function getNightChargeHours(
   if (tomorrowMostExpensiveMean - nightlyMeans[2] < SEK_THRESHOLD) {
     // if we charge during night due to low prices set soc to 80% (if not saturday -> sunday then charge 100%)
     if (isCheapNightCharging) {
-      targetSoc = now.weekday === 6 ? 100 : 80;
+      targetSoc = shouldBalanceBatteryUpper ? 100 : 80;
       // else set soc to 50% and 2 charging hours to keep a backup in case of outage
     } else {
       targetSoc = 50;
@@ -64,7 +64,7 @@ export function getNightChargeHours(
     }
 
     // charge to 100% saturday -> sunday
-    if (now.weekday === 6) {
+    if (shouldBalanceBatteryUpper) {
       targetSoc = 100;
     } else {
       // mean of tomorrows 3 cheapest hours

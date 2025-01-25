@@ -13,6 +13,7 @@
   "dependencies": {
     "@azure/functions": "^4.6.0",
     "@azure/service-bus": "^7.9.5",
+    "@azure/data-tables": "^13.3.0",
     "luxon": "^3.5.0"
   },
   "devDependencies": {

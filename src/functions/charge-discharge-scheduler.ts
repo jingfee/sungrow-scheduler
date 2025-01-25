@@ -10,13 +10,16 @@ import { Message, Operation } from '../message';
 import { enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
 import { getNightChargeHours, addToMessage, SEK_THRESHOLD } from '../util';
+import { getBatterySoc } from '../sungrow-api';
+import {
+  getLatestBatteryBalanceUpper,
+  setLatestBatteryBalanceUpper,
+} from '../data-tables';
 
 // TODO:
 // * Implement 1-2 extra hours for day charging
 // * Discharge based on priority - check mean power usage previous hours - high power usage prioritize fewer hours with high price - low power usage can discharge more hours
-// * Check SOC when night charging and adjust charging hours/charging power accordingly
 // * Set min soc percentage to allow periodically full discharge
-// * Use some kind of storage/db to save latest battery calibration (0%->100%) -> calibrate battery periodically
 
 export async function chargeDischargeSchedule(
   myTimer: Timer,
@@ -76,20 +79,48 @@ async function setNightCharging(
   //  targetsoc 99% if diff most expensive and cheapest hour is more than 75 öre
   //  targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
 
-  const chargingHoursPower = {
-    2: 3800,
-    3: 2900,
-    4: 2200,
-  };
-  const [chargeHours, targetSoc, skipDayDischarge] =
-    getNightChargeHours(prices);
+  const latestBalanceUpper = await getLatestBatteryBalanceUpper();
+  const diff = DateTime.now().diff(latestBalanceUpper, 'days');
+  const shouldBalanceBatteryUpper = diff >= 7;
+
+  let [chargeHours, targetSoc, skipDayDischarge] = getNightChargeHours(
+    prices,
+    shouldBalanceBatteryUpper
+  );
+
+  const currentSoc = parseFloat(await getBatterySoc());
+  const chargeAmount = (targetSoc / 100 - currentSoc) * 9.6 * 1000;
+
+  if (chargeAmount <= 0) {
+    // no need to charge
+    return skipDayDischarge;
+  }
+
+  let chargingPower;
+  while (chargeHours.length > 1) {
+    chargingPower =
+      Math.ceil(((chargeAmount / chargeHours.length) * 1.2) / 100) * 100;
+
+    if (chargingPower < 1000) {
+      chargeHours = chargeHours
+        .sort((a, b) => (a.price > b.price ? 1 : -1))
+        .slice(1)
+        .sort((a, b) => (a.time > b.time ? 1 : -1));
+    } else {
+      break;
+    }
+  }
+
+  if (targetSoc === 100) {
+    await setLatestBatteryBalanceUpper(DateTime.now());
+  }
 
   addToMessage(
     chargeHours,
     messages,
     {
       operation: Operation.StartCharge,
-      power: chargingHoursPower[chargeHours.length],
+      power: chargingPower,
       targetSoc,
     } as Message,
     {
