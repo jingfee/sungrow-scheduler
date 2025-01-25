@@ -27,12 +27,10 @@ export async function dischargeLeftoverHttp(
 }
 
 async function handleFunction(context: InvocationContext) {
-  // discharge-leftover - at 20:00, 21:00
-  //5. check leftover charge
   //  if battery level > 25 and current price is at least 50 öre more expensive than avg of 2 cheapest night hours, add discharge schedule for next hour
   const prices = await getPrices();
   const soc = await getBatterySoc();
-  if (parseFloat(soc) <= 0.24) {
+  if (parseFloat(soc) <= 0.25) {
     return;
   }
 
@@ -66,7 +64,7 @@ app.timer('discharge-leftover', {
   handler: dischargeLeftover,
 });
 
-app.http('discharge-leftover-debug', {
+/*app.http('discharge-leftover-debug', {
   methods: ['GET'],
   handler: dischargeLeftoverHttp,
-});
+});*/

@@ -121,6 +121,10 @@ export async function setStopBatteryChargeDischarge() {
     expire_second: 1800,
     param_list: [
       {
+        param_code: 10001, //soc upper limit
+        set_value: 1000,
+      },
+      {
         param_code: 10003, //energy management mode
         set_value: 2, //compulsory mode
       },
