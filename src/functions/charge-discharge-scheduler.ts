@@ -16,6 +16,7 @@ import { getNightChargeHours, addToMessage, SEK_THRESHOLD } from '../util';
 // * Discharge based on priority - check mean power usage previous hours - high power usage prioritize fewer hours with high price - low power usage can discharge more hours
 // * Check SOC when night charging and adjust charging hours/charging power accordingly
 // * Set min soc percentage to allow periodically full discharge
+// * Use some kind of storage/db to save latest battery calibration (0%->100%) -> calibrate battery periodically
 
 export async function chargeDischargeSchedule(
   myTimer: Timer,
