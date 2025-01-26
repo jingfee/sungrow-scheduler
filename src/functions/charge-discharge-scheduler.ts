@@ -53,7 +53,7 @@ async function handleFunction(context: InvocationContext) {
 }
 
 app.timer('charge-discharge-schedule', {
-  schedule: '0 0 20 * * *',
+  schedule: '0 55 20 * * *',
   handler: chargeDischargeSchedule,
 });
 

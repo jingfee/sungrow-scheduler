@@ -27,10 +27,13 @@ export function getNightChargeHours(
     8: sortedHours.slice(0, 8).reduce((a, b) => a + b.price, 0) / 8,
   };
 
-  // Price during night is cheap - charge for 3 hours no matter what
-  if (nightlyMeans[3] < 0.1) {
-    chargingHours = 3;
-    isCheapNightCharging = true;
+  // Price during night is cheap - charge no matter what
+  for (let hour = 4; hour <= 2; hour--) {
+    if (nightlyMeans[hour] < 0.1) {
+      chargingHours = hour;
+      isCheapNightCharging = true;
+      break;
+    }
   }
 
   const tomorrowMostExpensiveMean =
@@ -42,9 +45,9 @@ export function getNightChargeHours(
 
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
   if (tomorrowMostExpensiveMean - nightlyMeans[2] < SEK_THRESHOLD) {
-    // if we charge during night due to low prices set soc to 80% (if not saturday -> sunday then charge 100%)
+    // if we charge during night due to low prices set soc to 80%
     if (isCheapNightCharging) {
-      targetSoc = shouldBalanceBatteryUpper ? 100 : 80;
+      targetSoc = 80;
       // else set soc to 50% and 2 charging hours to keep a backup in case of outage
     } else {
       targetSoc = 50;
