@@ -59,7 +59,36 @@ export async function getBatterySoc() {
     const responseJson = await response.json();
     const soc =
       responseJson?.result_data?.device_point_list[0].device_point.p13141;
-    return soc;
+    return parseFloat(soc);
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function getDailyLoad() {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/getDeviceRealTimeData`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    device_type: 14,
+    point_id_list: ['13199'],
+    ps_key_list: [process.env['DeviceKeyId']],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      return;
+    }
+    const responseJson = await response.json();
+    const dailyLoad =
+      responseJson?.result_data?.device_point_list[0].device_point.p13199;
+    return parseInt(dailyLoad);
   } catch (error: any) {
     console.error(error.message);
   }
@@ -76,7 +105,9 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: `${DateTime.now().toISO()} Set start battery charge`,
+    task_name: `${DateTime.now()
+      .setZone('Europe/Stockholm')
+      .toISO()} Set start battery charge`,
     expire_second: 1800,
     param_list: [
       {
@@ -117,7 +148,9 @@ export async function setStopBatteryChargeDischarge() {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: `${DateTime.now().toISO()} Set stop battery charge-discharge`,
+    task_name: `${DateTime.now()
+      .setZone('Europe/Stockholm')
+      .toISO()} Set stop battery charge-discharge`,
     expire_second: 1800,
     param_list: [
       {
@@ -158,7 +191,9 @@ export async function setStartBatteryDischarge() {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: `${DateTime.now().toISO()} Set start battery discharge`,
+    task_name: `${DateTime.now()
+      .setZone('Europe/Stockholm')
+      .toISO()} Set start battery discharge`,
     expire_second: 1800,
     param_list: [
       {

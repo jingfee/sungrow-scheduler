@@ -9,7 +9,12 @@ import { getPrices, Price } from '../prices';
 import { Message, Operation } from '../message';
 import { enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
-import { getNightChargeHours, addToMessage, SEK_THRESHOLD } from '../util';
+import {
+  getNightChargeHours,
+  addToMessage,
+  SEK_THRESHOLD,
+  addToMessageWithRank,
+} from '../util';
 import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
@@ -88,7 +93,7 @@ async function setNightCharging(
     shouldBalanceBatteryUpper
   );
 
-  const currentSoc = parseFloat(await getBatterySoc());
+  const currentSoc = await getBatterySoc();
   const chargeAmount = (targetSoc / 100 - currentSoc) * 9.6 * 1000;
 
   if (chargeAmount <= 0) {
@@ -170,6 +175,14 @@ async function setDayChargeAndDischarge(
       operation: Operation.StopCharge,
     } as Message;
 
+  const rankings: Record<string, number> = {};
+  for (const [index, hour] of moreExpensiveBefore.slice(0, 3).entries()) {
+    rankings[hour.time] = index;
+  }
+  for (const [index, hour] of moreExpensiveAfter.slice(0, 3).entries()) {
+    rankings[hour.time] = index;
+  }
+
   const dischargeHours = [
     ...moreExpensiveBefore
       .slice(0, 3)
@@ -179,8 +192,9 @@ async function setDayChargeAndDischarge(
       .sort((a, b) => (a.time > b.time ? 1 : -1)),
   ];
 
-  addToMessage(
+  addToMessageWithRank(
     dischargeHours,
+    rankings,
     messages,
     {
       operation: Operation.StartDischarge,
@@ -193,18 +207,30 @@ async function setDayChargeAndDischarge(
   return true;
 }
 
-async function setDayDischarge(prices, messages: Record<string, Message>) {
+async function setDayDischarge(
+  prices: Price[],
+  messages: Record<string, Message>
+) {
   //  find 4 most expensive hours between 06:00-22:00
   //  add message to bus to discharge at most expensive hours
 
-  const dischargeHours = prices
+  const dischargeHoursPriceSorted = prices
     .slice(30, 46) // 06:00 to 22:00
     .sort((a, b) => (a.price < b.price ? 1 : -1))
-    .slice(0, 4)
-    .sort((a, b) => (a.time > b.time ? 1 : -1));
+    .slice(0, 5);
 
-  addToMessage(
-    dischargeHours,
+  const rankings: Record<string, number> = {};
+  for (const [index, hour] of dischargeHoursPriceSorted.entries()) {
+    rankings[hour.time] = index;
+  }
+
+  const dischargeHoursDateSorted = [...dischargeHoursPriceSorted].sort((a, b) =>
+    a.time > b.time ? 1 : -1
+  );
+
+  addToMessageWithRank(
+    dischargeHoursDateSorted,
+    rankings,
     messages,
     {
       operation: Operation.StartDischarge,

@@ -30,7 +30,7 @@ async function handleFunction(context: InvocationContext) {
   //  if battery level > 25 and current price is at least 50 öre more expensive than avg of 2 cheapest night hours, add discharge schedule for next hour
   const prices = await getPrices();
   const soc = await getBatterySoc();
-  if (parseFloat(soc) <= 0.25) {
+  if (soc <= 0.25) {
     return;
   }
 
@@ -41,7 +41,7 @@ async function handleFunction(context: InvocationContext) {
       .slice(0, 2)
       .reduce((a, b) => a + b.price, 0) / 2;
 
-  const currentHour = DateTime.now().hour;
+  const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
   if (prices[currentHour].price - cheapestNightMean > 0.5) {
     await enqueue(
       {

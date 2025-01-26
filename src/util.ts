@@ -36,6 +36,19 @@ export function getNightChargeHours(
     }
   }
 
+  if (chargingHours === 0) {
+    // small diff during night - charge 4 hours
+    if (nightlyMeans[4] - nightlyMeans[2] < 0.1) {
+      chargingHours = 4;
+      // mid diff during night - charge 3 hours
+    } else if (nightlyMeans[3] - nightlyMeans[2] < 0.05) {
+      chargingHours = 3;
+      // higher diff during night - charge 2 hours
+    } else {
+      chargingHours = 2;
+    }
+  }
+
   const tomorrowMostExpensiveMean =
     prices
       .slice(24) // 00:00 to 23:00 next day
@@ -51,21 +64,9 @@ export function getNightChargeHours(
       // else set soc to 50% and 2 charging hours to keep a backup in case of outage
     } else {
       targetSoc = 50;
-      chargingHours = 2;
     }
     skipDayDischarge = true;
   } else {
-    // small diff during night - charge 4 hours
-    if (nightlyMeans[4] - nightlyMeans[2] < 0.1) {
-      chargingHours = 4;
-      // mid diff during night - charge 3 hours
-    } else if (nightlyMeans[3] - nightlyMeans[2] < 0.05) {
-      chargingHours = 3;
-      // higher diff during night - charge 2 hours
-    } else {
-      chargingHours = 2;
-    }
-
     // charge to 100% saturday -> sunday
     if (shouldBalanceBatteryUpper) {
       targetSoc = 100;
@@ -120,6 +121,32 @@ export function addToMessage(
     if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
       messages[DateTime.fromISO(chargeHour.time).toISO()] = startMessage;
     }
+
+    if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
+      messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] =
+        stopMessage;
+    }
+  }
+}
+
+export function addToMessageWithRank(
+  hoursDateSorted: Price[],
+  rankings: Record<string, number>,
+  messages: Record<string, Message>,
+  startMessage: Message,
+  stopMessage: Message
+) {
+  for (const [index, chargeHour] of hoursDateSorted.entries()) {
+    const currDate = DateTime.fromISO(chargeHour.time);
+    const nextDate =
+      index === hoursDateSorted.length - 1
+        ? undefined
+        : DateTime.fromISO(hoursDateSorted[index + 1].time);
+
+    messages[DateTime.fromISO(chargeHour.time).toISO()] = {
+      ...startMessage,
+      rank: rankings[chargeHour.time],
+    } as Message;
 
     if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
       messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] =
