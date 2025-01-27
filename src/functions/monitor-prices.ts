@@ -93,10 +93,10 @@ export async function handleFunction(context: InvocationContext) {
   }
 }
 
-app.timer('monitor-prices', {
+/*app.timer('monitor-prices', {
   schedule: '0 30 13 * * *',
   handler: monitorPrices,
-});
+});*/
 
 /*app.http('monitor-prices-debug', {
   methods: ['GET'],

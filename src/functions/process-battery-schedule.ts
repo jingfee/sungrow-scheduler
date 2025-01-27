@@ -1,4 +1,9 @@
-import { app, InvocationContext } from '@azure/functions';
+import {
+  app,
+  HttpRequest,
+  HttpResponseInit,
+  InvocationContext,
+} from '@azure/functions';
 import { Message, Operation } from '../message';
 import {
   getDailyLoad,
@@ -15,6 +20,29 @@ export async function serviceBusTrigger(
   message: Message,
   context: InvocationContext
 ): Promise<void> {
+  await handleFunction(message, context);
+}
+
+export async function serviceBusTriggerHttp(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  await handleFunction({ operation: Operation.StartCharge, rank: 2 }, context);
+  return { body: 'Discharge Leftover complete' };
+}
+
+app.serviceBusQueue('service-bus-trigger', {
+  connection: 'ServiceBusConnectionString',
+  queueName: serviceBusName,
+  handler: serviceBusTrigger,
+});
+
+/*app.http('service-bus-trigger-debug', {
+  methods: ['GET'],
+  handler: serviceBusTriggerHttp,
+});*/
+
+async function handleFunction(message: Message, context: InvocationContext) {
   switch (message.operation) {
     case Operation.StartCharge:
       await setStartBatteryCharge(message.power, message.targetSoc);
@@ -26,12 +54,6 @@ export async function serviceBusTrigger(
       await setStopBatteryChargeDischarge();
   }
 }
-
-app.serviceBusQueue('service-bus-trigger', {
-  connection: 'ServiceBusConnectionString',
-  queueName: serviceBusName,
-  handler: serviceBusTrigger,
-});
 
 async function handleBatteryDischarge(message: Message) {
   const dailyLoad = await getDailyLoad();
@@ -48,6 +70,7 @@ async function handleBatteryDischarge(message: Message) {
     );
     if (hasFutureDischargeWithLowerRank) {
       await setStopBatteryChargeDischarge();
+      return;
     }
   }
 

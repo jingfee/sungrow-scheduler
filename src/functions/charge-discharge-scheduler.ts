@@ -85,8 +85,8 @@ async function setNightCharging(
   //  targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
 
   const latestBalanceUpper = await getLatestBatteryBalanceUpper();
-  const diff = DateTime.now().diff(latestBalanceUpper, 'days');
-  const shouldBalanceBatteryUpper = diff >= 7;
+  const diff = DateTime.now().diff(latestBalanceUpper, 'days').toObject();
+  const shouldBalanceBatteryUpper = diff.days >= 7;
 
   let [chargeHours, targetSoc, skipDayDischarge] = getNightChargeHours(
     prices,
@@ -101,16 +101,17 @@ async function setNightCharging(
     return skipDayDischarge;
   }
 
-  let chargingPower;
+  let chargingPower =
+    Math.ceil(((chargeAmount / chargeHours.length) * 1.2) / 100) * 100;
   while (chargeHours.length > 1) {
-    chargingPower =
-      Math.ceil(((chargeAmount / chargeHours.length) * 1.2) / 100) * 100;
-
-    if (chargingPower < 1000) {
+    if (chargingPower < 800) {
       chargeHours = chargeHours
         .sort((a, b) => (a.price > b.price ? 1 : -1))
         .slice(1)
         .sort((a, b) => (a.time > b.time ? 1 : -1));
+
+      chargingPower =
+        Math.ceil(((chargeAmount / chargeHours.length) * 1.2) / 100) * 100;
     } else {
       break;
     }
