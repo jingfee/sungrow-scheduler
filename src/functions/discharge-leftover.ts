@@ -10,6 +10,7 @@ import { Message, Operation } from '../message';
 import { enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
 import { getBatterySoc } from '../sungrow-api';
+import { MIN_SOC } from '../consts';
 
 export async function dischargeLeftover(
   myTimer: Timer,
@@ -26,11 +27,21 @@ export async function dischargeLeftoverHttp(
   return { body: 'Discharge Leftover complete' };
 }
 
+app.timer('discharge-leftover', {
+  schedule: '0 0 19-20 * * *',
+  handler: dischargeLeftover,
+});
+
+/*app.http('discharge-leftover-debug', {
+  methods: ['GET'],
+  handler: dischargeLeftoverHttp,
+});*/
+
 async function handleFunction(context: InvocationContext) {
   //  if battery level > 25 and current price is at least 50 öre more expensive than avg of 2 cheapest night hours, add discharge schedule for next hour
   const prices = await getPrices();
   const soc = await getBatterySoc();
-  if (soc <= 0.25) {
+  if (soc <= MIN_SOC) {
     return;
   }
 
@@ -58,13 +69,3 @@ async function handleFunction(context: InvocationContext) {
     );
   }
 }
-
-app.timer('discharge-leftover', {
-  schedule: '0 0 19-20 * * *',
-  handler: dischargeLeftover,
-});
-
-/*app.http('discharge-leftover-debug', {
-  methods: ['GET'],
-  handler: dischargeLeftoverHttp,
-});*/

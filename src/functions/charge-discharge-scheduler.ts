@@ -12,18 +12,18 @@ import { DateTime } from 'luxon';
 import {
   getNightChargeHours,
   addToMessage,
-  SEK_THRESHOLD,
   addToMessageWithRank,
 } from '../util';
 import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
   setLatestBatteryBalanceUpper,
+  setLatestChargeSoc,
 } from '../data-tables';
+import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 
 // TODO:
 // * Implement 1-2 extra hours for day charging
-// * Discharge based on priority - check mean power usage previous hours - high power usage prioritize fewer hours with high price - low power usage can discharge more hours
 // * Set min soc percentage to allow periodically full discharge
 
 export async function chargeDischargeSchedule(
@@ -41,7 +41,18 @@ export async function chargeDischargeScheduleHttp(
   return { body: 'Schedule complete' };
 }
 
+app.timer('charge-discharge-schedule', {
+  schedule: '0 55 20 * * *',
+  handler: chargeDischargeSchedule,
+});
+
+/*app.http('charge-discharge-schedule-debug', {
+  methods: ['GET'],
+  handler: chargeDischargeScheduleHttp,
+});*/
+
 async function handleFunction(context: InvocationContext) {
+  await setLatestChargeSoc(0.87);
   const messages: Record<string, Message> = {};
   const prices = await getPrices();
   const skipDayDischarge = await setNightCharging(prices, messages);
@@ -56,16 +67,6 @@ async function handleFunction(context: InvocationContext) {
     await enqueue(message, DateTime.fromISO(time));
   }
 }
-
-app.timer('charge-discharge-schedule', {
-  schedule: '0 55 20 * * *',
-  handler: chargeDischargeSchedule,
-});
-
-/*app.http('charge-discharge-schedule-debug', {
-  methods: ['GET'],
-  handler: chargeDischargeScheduleHttp,
-});*/
 
 async function setNightCharging(
   prices: Price[],
@@ -94,7 +95,7 @@ async function setNightCharging(
   );
 
   const currentSoc = await getBatterySoc();
-  const chargeAmount = (targetSoc / 100 - currentSoc) * 9.6 * 1000;
+  const chargeAmount = (targetSoc / 100 - currentSoc) * BATTERY_CAPACITY;
 
   if (chargeAmount <= 0) {
     // no need to charge

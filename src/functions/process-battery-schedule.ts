@@ -6,6 +6,7 @@ import {
 } from '@azure/functions';
 import { Message, Operation } from '../message';
 import {
+  getBatterySoc,
   getDailyLoad,
   setStartBatteryCharge,
   setStartBatteryDischarge,
@@ -13,6 +14,8 @@ import {
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
 import { getDischargeMessages } from '../service-bus';
+import { getLatestChargeSoc, setLatestChargeSoc } from '../data-tables';
+import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 
 const serviceBusName = 'battery-queue';
 
@@ -47,7 +50,7 @@ async function handleFunction(message: Message, context: InvocationContext) {
     case Operation.StartCharge:
       await setStartBatteryCharge(message.power, message.targetSoc);
     case Operation.StopCharge:
-      await setStopBatteryChargeDischarge();
+      await handleStopBatteryCharge();
     case Operation.StartDischarge:
       await handleBatteryDischarge(message);
     case Operation.StopDischarge:
@@ -55,13 +58,21 @@ async function handleFunction(message: Message, context: InvocationContext) {
   }
 }
 
+async function handleStopBatteryCharge() {
+  await setStopBatteryChargeDischarge();
+  const soc = await getBatterySoc();
+  await setLatestChargeSoc(soc);
+}
+
 async function handleBatteryDischarge(message: Message) {
   const dailyLoad = await getDailyLoad();
   const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
   const loadHourlyMean = dailyLoad / currentHour;
 
-  const batteryCapacity = 7200;
-  const hours = Math.round(batteryCapacity / loadHourlyMean);
+  const latestChargeSoc = await getLatestChargeSoc();
+  const dischargeCapacity = (latestChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
+
+  const hours = Math.round(dischargeCapacity / loadHourlyMean);
 
   if (message.rank != undefined && message.rank >= hours) {
     const dischargeMessages = await getDischargeMessages();

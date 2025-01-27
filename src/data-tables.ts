@@ -13,18 +13,34 @@ const _client = new TableClient(
 
 export async function setLatestBatteryBalanceUpper(date: DateTime) {
   await _client.upsertEntity({
-    partitionKey: Limit.Upper.toString(),
+    partitionKey: TableKeys.LatestBatteryBalanceUpper,
     rowKey: '',
-    date: date.toString(),
+    value: date.toString(),
   });
 }
 
-export async function getLatestBatteryBalanceUpper(): DateTime {
-  const entity = await _client.getEntity(Limit.Upper.toString(), '');
-  return DateTime.fromISO(entity.date);
+export async function getLatestBatteryBalanceUpper(): Promise<DateTime> {
+  const entity = await _client.getEntity(
+    TableKeys.LatestBatteryBalanceUpper,
+    ''
+  );
+  return DateTime.fromISO(entity.value);
 }
 
-enum Limit {
-  Upper,
-  Lower,
+export async function setLatestChargeSoc(soc: number) {
+  await _client.upsertEntity({
+    partitionKey: TableKeys.LatestChargeSoc,
+    rowKey: '',
+    value: soc.toString(),
+  });
+}
+
+export async function getLatestChargeSoc(): Promise<number> {
+  const entity = await _client.getEntity(TableKeys.LatestChargeSoc, '');
+  return parseFloat(entity.value as string);
+}
+
+enum TableKeys {
+  LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
+  LatestChargeSoc = 'LatestChargeSoc',
 }

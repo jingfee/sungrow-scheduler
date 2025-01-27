@@ -9,8 +9,9 @@ import { getPrices } from '../prices';
 import { Message, Operation } from '../message';
 import { clearMessage, enqueue, getDischargeMessages } from '../service-bus';
 import { DateTime } from 'luxon';
-import { addToMessage, getNightChargeHours, SEK_THRESHOLD } from '../util';
+import { addToMessageWithRank, getNightChargeHours } from '../util';
 import { getBatterySoc } from '../sungrow-api';
+import { SEK_THRESHOLD } from '../consts';
 
 export async function monitorPrices(
   myTimer: Timer,
@@ -27,6 +28,16 @@ export async function monitorPricesHttp(
   return { body: 'Monitor prices complete' };
 }
 
+app.timer('monitor-prices', {
+  schedule: '0 30 13 * * *',
+  handler: monitorPrices,
+});
+
+/*app.http('monitor-prices-debug', {
+  methods: ['GET'],
+  handler: monitorPricesHttp,
+});*/
+
 export async function handleFunction(context: InvocationContext) {
   //  check remaining discharge for the day
   //  get the charging hours for the night and calculate the mean
@@ -38,67 +49,59 @@ export async function handleFunction(context: InvocationContext) {
     return;
   }
 
-  const [chargingHours, ,] = getNightChargeHours(prices, false);
-  const chargingHoursMean =
-    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
-
-  const currentSoc = await getBatterySoc();
-
   for (const dischargeMessage of dischargeMessages) {
     await clearMessage(dischargeMessage.sequenceNumber);
   }
 
+  const [chargingHours, ,] = getNightChargeHours(prices, false);
+  const chargingHoursMean =
+    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
+
   let mostExpensiveDischarge = { price: 0 };
   const dischargeHours = [];
-  for (const [index, dischargeMessage] of dischargeMessages
-    .sort((a, b) =>
-      a.scheduledEnqueueTimeUtc > b.scheduledEnqueueTimeUtc ? 1 : -1
-    )
-    .entries()) {
-    if (
-      (dischargeMessage.body as Message).operation === Operation.StartDischarge
-    ) {
-      const chargeHours =
-        dischargeMessages[index + 1].scheduledEnqueueTimeUtc.getHours() -
-        dischargeMessage.scheduledEnqueueTimeUtc.getHours();
+  for (const dischargeMessage of dischargeMessages.filter(
+    (m) => (m.body as Message).operation === Operation.StartDischarge
+  )) {
+    const dischargePrice =
+      prices[dischargeMessage.scheduledEnqueueTimeUtc.getHours()];
+    if (dischargePrice.price - chargingHoursMean > SEK_THRESHOLD) {
+      dischargeHours.push(dischargePrice);
+    }
 
-      for (let i = 0; i < chargeHours; i++) {
-        const dischargePrice =
-          prices[dischargeMessage.scheduledEnqueueTimeUtc.getHours() + i];
-        if (dischargePrice.price - chargingHoursMean > SEK_THRESHOLD) {
-          dischargeHours.push(dischargePrice);
-        }
-
-        if (dischargePrice.price > mostExpensiveDischarge.price) {
-          mostExpensiveDischarge = dischargePrice;
-        }
-      }
+    if (dischargePrice.price > mostExpensiveDischarge.price) {
+      mostExpensiveDischarge = dischargePrice;
     }
   }
 
-  if (dischargeHours.length === 0 && currentSoc >= 0.9) {
-    dischargeHours.push(mostExpensiveDischarge);
+  // keep at least 1 discharge if soc is high
+  if (dischargeHours.length === 0) {
+    const currentSoc = await getBatterySoc();
+    if (currentSoc >= 0.9) {
+      dischargeHours.push(mostExpensiveDischarge);
+    }
+  }
+
+  const rankings: Record<string, number> = {};
+  for (const [index, hour] of [...dischargeHours]
+    .sort((a, b) => (a.price < b.price ? 1 : -1))
+    .entries()) {
+    rankings[hour.time] = index;
   }
 
   const messages: Record<string, Message> = {};
-  addToMessage(
+  addToMessageWithRank(
     dischargeHours,
+    rankings,
     messages,
-    { operation: Operation.StartDischarge } as Message,
-    { operation: Operation.StopCharge } as Message
+    {
+      operation: Operation.StartDischarge,
+    } as Message,
+    {
+      operation: Operation.StopCharge,
+    } as Message
   );
 
   for (const [time, message] of Object.entries(messages)) {
     await enqueue(message, DateTime.fromISO(time));
   }
 }
-
-/*app.timer('monitor-prices', {
-  schedule: '0 30 13 * * *',
-  handler: monitorPrices,
-});*/
-
-/*app.http('monitor-prices-debug', {
-  methods: ['GET'],
-  handler: monitorPricesHttp,
-});*/

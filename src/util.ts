@@ -1,8 +1,7 @@
+import { SEK_THRESHOLD } from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
-
-export const SEK_THRESHOLD = parseFloat(process.env['SEK_THRESHOLD']);
 
 export function getNightChargeHours(
   prices: Price[],
