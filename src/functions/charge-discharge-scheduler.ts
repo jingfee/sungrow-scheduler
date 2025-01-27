@@ -22,10 +22,6 @@ import {
 } from '../data-tables';
 import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 
-// TODO:
-// * Implement 1-2 extra hours for day charging
-// * Set min soc percentage to allow periodically full discharge
-
 export async function chargeDischargeSchedule(
   myTimer: Timer,
   context: InvocationContext
@@ -151,6 +147,7 @@ async function setDayChargeAndDischarge(
     .slice(34, 40) //tomorrow 10:00 - 16:00
     .sort((a, b) => (a.price > b.price ? 1 : -1));
   const cheapestDayPrice = sortedPrices[0];
+
   const cheapestHour = DateTime.fromISO(cheapestDayPrice.time).hour;
 
   const moreExpensiveBefore = prices
@@ -166,32 +163,55 @@ async function setDayChargeAndDischarge(
     return false;
   }
 
-  messages[DateTime.fromISO(cheapestDayPrice.time).toISO()] = {
-    operation: Operation.StartCharge,
-    power: 5000,
-    targetSoc: 90,
-  } as Message;
+  // choose up to 4 hours before and after cheapest hour to discharge
+  const dischargeHoursBefore = moreExpensiveBefore.slice(0, 4);
+  const dischargeHoursAfter = moreExpensiveAfter.slice(0, 4);
+  // target soc based on the number of discharge hours after the day charge
+  const targetSoc = dischargeHoursAfter.length >= 2 ? 90 : 60;
+  const nextCheapestDayPrice = sortedPrices[1];
+  // only charge 2 hours instead of 1 if the price diff is small
+  const numberOfChargeHours =
+    nextCheapestDayPrice.price - cheapestDayPrice.price <= 0.05 ? 2 : 1;
+  // chargepower based on the 1 or 2 charge hours and the numbers of dischargehoursbefore
+  const chargePower =
+    numberOfChargeHours === 2
+      ? dischargeHoursBefore.length >= 3
+        ? 5000
+        : 3000
+      : dischargeHoursBefore.length >= 2
+      ? 5000
+      : 3000;
 
-  messages[DateTime.fromISO(cheapestDayPrice.time).plus({ hours: 1 }).toISO()] =
-    {
-      operation: Operation.StopCharge,
+  const chargeHours =
+    numberOfChargeHours === 2
+      ? [cheapestDayPrice, nextCheapestDayPrice].sort((a, b) =>
+          a.time > b.time ? 1 : -1
+        )
+      : [cheapestDayPrice];
+
+  for (const chargeHour of chargeHours) {
+    messages[DateTime.fromISO(chargeHour.time).toISO()] = {
+      operation: Operation.StartCharge,
+      power: chargePower,
+      targetSoc: targetSoc,
     } as Message;
 
+    messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] = {
+      operation: Operation.StopCharge,
+    } as Message;
+  }
+
   const rankings: Record<string, number> = {};
-  for (const [index, hour] of moreExpensiveBefore.slice(0, 3).entries()) {
+  for (const [index, hour] of dischargeHoursBefore.entries()) {
     rankings[hour.time] = index;
   }
-  for (const [index, hour] of moreExpensiveAfter.slice(0, 3).entries()) {
+  for (const [index, hour] of dischargeHoursAfter.entries()) {
     rankings[hour.time] = index;
   }
 
   const dischargeHours = [
-    ...moreExpensiveBefore
-      .slice(0, 3)
-      .sort((a, b) => (a.time > b.time ? 1 : -1)),
-    ...moreExpensiveAfter
-      .slice(0, 3)
-      .sort((a, b) => (a.time > b.time ? 1 : -1)),
+    ...dischargeHoursBefore.sort((a, b) => (a.time > b.time ? 1 : -1)),
+    ...dischargeHoursAfter.sort((a, b) => (a.time > b.time ? 1 : -1)),
   ];
 
   addToMessageWithRank(
