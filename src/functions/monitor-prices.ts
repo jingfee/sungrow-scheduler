@@ -50,6 +50,7 @@ export async function handleFunction(context: InvocationContext) {
   }
 
   for (const dischargeMessage of dischargeMessages) {
+    context.log('Clearing message', JSON.stringify(dischargeMessage.body));
     await clearMessage(dischargeMessage.sequenceNumber);
   }
 
@@ -63,7 +64,11 @@ export async function handleFunction(context: InvocationContext) {
     (m) => (m.body as Message).operation === Operation.StartDischarge
   )) {
     const dischargePrice =
-      prices[dischargeMessage.scheduledEnqueueTimeUtc.getHours()];
+      prices[
+        DateTime.fromJSDate(dischargeMessage.scheduledEnqueueTimeUtc, {
+          zone: 'Europe/Stockholm',
+        }).hour
+      ];
     if (dischargePrice.price - chargingHoursMean > SEK_THRESHOLD) {
       dischargeHours.push(dischargePrice);
     }
@@ -81,11 +86,15 @@ export async function handleFunction(context: InvocationContext) {
     }
   }
 
+  const minRankOfRemaningDischarge = dischargeMessages
+    .filter((m) => m.body.operation === Operation.StartDischarge)
+    .sort((a, b) => (a.body.ranking > b.body.ranking ? 1 : -1))[0].body.ranking;
+
   const rankings: Record<string, number> = {};
   for (const [index, hour] of [...dischargeHours]
     .sort((a, b) => (a.price < b.price ? 1 : -1))
     .entries()) {
-    rankings[hour.time] = index;
+    rankings[hour.time] = index + minRankOfRemaningDischarge;
   }
 
   const messages: Record<string, Message> = {};
@@ -102,6 +111,7 @@ export async function handleFunction(context: InvocationContext) {
   );
 
   for (const [time, message] of Object.entries(messages)) {
+    context.log('Adding message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
 }

@@ -58,6 +58,7 @@ async function handleFunction(context: InvocationContext) {
   }
 
   for (const [time, message] of Object.entries(messages)) {
+    context.log('Adding message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
 }
