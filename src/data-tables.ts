@@ -40,7 +40,27 @@ export async function getLatestChargeSoc(): Promise<number> {
   return parseFloat(entity.value as string);
 }
 
+export async function setStatus(status: Status) {
+  await _client.upsertEntity({
+    partitionKey: TableKeys.Status,
+    rowKey: '',
+    value: status.toString(),
+  });
+}
+
+export async function getStatus(): Promise<Status> {
+  const entity = await _client.getEntity(TableKeys.Status, '');
+  return parseInt(entity.value as string);
+}
+
 enum TableKeys {
   LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
   LatestChargeSoc = 'LatestChargeSoc',
+  Status = 'Status',
+}
+
+export enum Status {
+  Charging,
+  Discharging,
+  Stopped,
 }

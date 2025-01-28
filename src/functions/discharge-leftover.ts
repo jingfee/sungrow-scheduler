@@ -11,6 +11,7 @@ import { enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
 import { getBatterySoc } from '../sungrow-api';
 import { MIN_SOC } from '../consts';
+import { getStatus, Status } from '../data-tables';
 
 export async function dischargeLeftover(
   myTimer: Timer,
@@ -28,7 +29,7 @@ export async function dischargeLeftoverHttp(
 }
 
 app.timer('discharge-leftover', {
-  schedule: '0 0 19-20 * * *',
+  schedule: '0 1 19-20 * * *',
   handler: dischargeLeftover,
 });
 
@@ -42,6 +43,11 @@ async function handleFunction(context: InvocationContext) {
   const prices = await getPrices();
   const soc = await getBatterySoc();
   if (soc <= MIN_SOC) {
+    return;
+  }
+
+  const status = await getStatus();
+  if (status === Status.Discharging) {
     return;
   }
 

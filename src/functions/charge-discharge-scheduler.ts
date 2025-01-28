@@ -18,7 +18,6 @@ import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
   setLatestBatteryBalanceUpper,
-  setLatestChargeSoc,
 } from '../data-tables';
 import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 
@@ -48,7 +47,6 @@ app.timer('charge-discharge-schedule', {
 });*/
 
 async function handleFunction(context: InvocationContext) {
-  await setLatestChargeSoc(0.87);
   const messages: Record<string, Message> = {};
   const prices = await getPrices();
   const skipDayDischarge = await setNightCharging(prices, messages);

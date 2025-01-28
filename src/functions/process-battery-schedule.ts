@@ -14,7 +14,12 @@ import {
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
 import { getDischargeMessages } from '../service-bus';
-import { getLatestChargeSoc, setLatestChargeSoc } from '../data-tables';
+import {
+  getLatestChargeSoc,
+  setLatestChargeSoc,
+  setStatus,
+  Status,
+} from '../data-tables';
 import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 
 const serviceBusName = 'battery-queue';
@@ -48,23 +53,39 @@ app.serviceBusQueue('service-bus-trigger', {
 async function handleFunction(message: Message, context: InvocationContext) {
   switch (message.operation) {
     case Operation.StartCharge:
-      await setStartBatteryCharge(message.power, message.targetSoc);
+      await handleStartBatteryCharge(message);
     case Operation.StopCharge:
       await handleStopBatteryCharge();
     case Operation.StartDischarge:
-      await handleBatteryDischarge(message);
+      await handleStartBatteryDischarge(message);
     case Operation.StopDischarge:
-      await setStopBatteryChargeDischarge();
+      await handleStopBatteryDischarge();
   }
+}
+
+async function handleStartBatteryCharge(message: Message) {
+  await setStartBatteryCharge(message.power, message.targetSoc);
+  await setStatus(Status.Charging);
 }
 
 async function handleStopBatteryCharge() {
   await setStopBatteryChargeDischarge();
+  await setStatus(Status.Stopped);
+  // wait 10 seconds to allow max soc to change
+  await sleep(10000);
   const soc = await getBatterySoc();
   await setLatestChargeSoc(soc);
 }
 
-async function handleBatteryDischarge(message: Message) {
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve('wakeup');
+    }, milliseconds);
+  });
+}
+
+async function handleStartBatteryDischarge(message: Message) {
   const dailyLoad = await getDailyLoad();
   const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
   const loadHourlyMean = dailyLoad / currentHour;
@@ -81,9 +102,16 @@ async function handleBatteryDischarge(message: Message) {
     );
     if (hasFutureDischargeWithLowerRank) {
       await setStopBatteryChargeDischarge();
+      await setStatus(Status.Stopped);
       return;
     }
   }
 
   await setStartBatteryDischarge();
+  await setStatus(Status.Discharging);
+}
+
+async function handleStopBatteryDischarge() {
+  await setStopBatteryChargeDischarge();
+  await setStatus(Status.Stopped);
 }
