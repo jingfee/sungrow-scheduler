@@ -51,15 +51,20 @@ app.serviceBusQueue('service-bus-trigger', {
 });*/
 
 async function handleFunction(message: Message, context: InvocationContext) {
+  context.log('Handling message', JSON.stringify(message));
   switch (message.operation) {
     case Operation.StartCharge:
       await handleStartBatteryCharge(message);
+      break;
     case Operation.StopCharge:
       await handleStopBatteryCharge();
+      break;
     case Operation.StartDischarge:
       await handleStartBatteryDischarge(message);
+      break;
     case Operation.StopDischarge:
       await handleStopBatteryDischarge();
+      break;
   }
 }
 
