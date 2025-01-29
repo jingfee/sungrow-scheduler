@@ -3,14 +3,8 @@ import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
 
-export function getNightChargeHours(
-  prices: Price[],
-  shouldBalanceBatteryUpper: boolean
-): [Price[], number, boolean] {
-  let isCheapNightCharging = false;
-  let skipDayDischarge = false;
+export function getNightChargeHours(prices: Price[]): Price[] {
   let chargingHours = 0;
-  let targetSoc = 0;
 
   const sortedHours = prices
     .slice(22, 30) // 22:00 to 06:00 next day
@@ -30,7 +24,6 @@ export function getNightChargeHours(
   for (let hour = 4; hour <= 2; hour--) {
     if (nightlyMeans[hour] < 0.1) {
       chargingHours = hour;
-      isCheapNightCharging = true;
       break;
     }
   }
@@ -48,6 +41,22 @@ export function getNightChargeHours(
     }
   }
 
+  const chargeHours = sortedHours
+    .slice(0, chargingHours)
+    .sort((a, b) => (a.time > b.time ? 1 : -1));
+
+  return chargeHours;
+}
+
+export function getTargetSoc(
+  prices: Price[],
+  chargingHours: Price[],
+  shouldBalanceBatteryUpper: boolean
+): number {
+  let targetSoc = 0;
+  const chargingHoursMean =
+    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
+
   const tomorrowMostExpensiveMean =
     prices
       .slice(24) // 00:00 to 23:00 next day
@@ -56,15 +65,14 @@ export function getNightChargeHours(
       .reduce((a, b) => a + b.price, 0) / 4;
 
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
-  if (tomorrowMostExpensiveMean - nightlyMeans[2] < SEK_THRESHOLD) {
+  if (tomorrowMostExpensiveMean - chargingHoursMean < SEK_THRESHOLD) {
     // if we charge during night due to low prices set soc to 80%
-    if (isCheapNightCharging) {
+    if (chargingHoursMean < 0.1) {
       targetSoc = 80;
       // else set soc to 50% and 2 charging hours to keep a backup in case of outage
     } else {
       targetSoc = 50;
     }
-    skipDayDischarge = true;
   } else {
     // charge to 100% saturday -> sunday
     if (shouldBalanceBatteryUpper) {
@@ -95,11 +103,7 @@ export function getNightChargeHours(
     }
   }
 
-  const chargeHours = sortedHours
-    .slice(0, chargingHours)
-    .sort((a, b) => (a.time > b.time ? 1 : -1));
-
-  return [chargeHours, targetSoc, skipDayDischarge];
+  return targetSoc;
 }
 
 export function addToMessage(

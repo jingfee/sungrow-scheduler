@@ -60,7 +60,7 @@ async function handleFunction(message: Message, context: InvocationContext) {
       await handleStopBatteryCharge();
       break;
     case Operation.StartDischarge:
-      await handleStartBatteryDischarge(message);
+      await handleStartBatteryDischarge(message, context);
       break;
     case Operation.StopDischarge:
       await handleStopBatteryDischarge();
@@ -90,7 +90,10 @@ function sleep(milliseconds: number) {
   });
 }
 
-async function handleStartBatteryDischarge(message: Message) {
+async function handleStartBatteryDischarge(
+  message: Message,
+  context: InvocationContext
+) {
   const dailyLoad = await getDailyLoad();
   const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
   const loadHourlyMean = dailyLoad / currentHour;
@@ -100,18 +103,21 @@ async function handleStartBatteryDischarge(message: Message) {
 
   const hours = Math.round(dischargeCapacity / loadHourlyMean);
 
+  context.log(`Rank: ${message.rank} Hours: ${hours}`);
   if (message.rank != undefined && message.rank >= hours) {
     const dischargeMessages = await getDischargeMessages();
-    const hasFutureDischargeWithLowerRank = dischargeMessages.some(
-      (m) => m.body.rank < message.rank
-    );
+    const hasFutureDischargeWithLowerRank = dischargeMessages
+      .filter((m) => (m.body as Message).operation === Operation.StartDischarge)
+      .some((m) => m.body.rank < message.rank);
     if (hasFutureDischargeWithLowerRank) {
+      context.log('Stopping discharge');
       await setStopBatteryChargeDischarge();
       await setStatus(Status.Stopped);
       return;
     }
   }
 
+  context.log('Starting discharge');
   await setStartBatteryDischarge();
   await setStatus(Status.Discharging);
 }

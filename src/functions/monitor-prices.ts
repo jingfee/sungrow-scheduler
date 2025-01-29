@@ -54,7 +54,7 @@ export async function handleFunction(context: InvocationContext) {
     await clearMessage(dischargeMessage.sequenceNumber);
   }
 
-  const [chargingHours, ,] = getNightChargeHours(prices, false);
+  const chargingHours = getNightChargeHours(prices);
   const chargingHoursMean =
     chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
 

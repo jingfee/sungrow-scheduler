@@ -7,12 +7,13 @@ import {
 } from '@azure/functions';
 import { getPrices, Price } from '../prices';
 import { Message, Operation } from '../message';
-import { enqueue } from '../service-bus';
+import { clearAllMessages, enqueue } from '../service-bus';
 import { DateTime } from 'luxon';
 import {
   getNightChargeHours,
   addToMessage,
   addToMessageWithRank,
+  getTargetSoc,
 } from '../util';
 import { getBatterySoc } from '../sungrow-api';
 import {
@@ -47,6 +48,7 @@ app.timer('charge-discharge-schedule', {
 });*/
 
 async function handleFunction(context: InvocationContext) {
+  await clearAllMessages();
   const messages: Record<string, Message> = {};
   const prices = await getPrices();
   const skipDayDischarge = await setNightCharging(prices, messages);
@@ -84,10 +86,13 @@ async function setNightCharging(
   const diff = DateTime.now().diff(latestBalanceUpper, 'days').toObject();
   const shouldBalanceBatteryUpper = diff.days >= 7;
 
-  let [chargeHours, targetSoc, skipDayDischarge] = getNightChargeHours(
+  let chargeHours = getNightChargeHours(prices);
+  const targetSoc = getTargetSoc(
     prices,
+    chargeHours,
     shouldBalanceBatteryUpper
   );
+  const skipDayDischarge = targetSoc < 0.98;
 
   const currentSoc = await getBatterySoc();
   const chargeAmount = (targetSoc / 100 - currentSoc) * BATTERY_CAPACITY;

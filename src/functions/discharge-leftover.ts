@@ -12,6 +12,7 @@ import { DateTime } from 'luxon';
 import { getBatterySoc } from '../sungrow-api';
 import { MIN_SOC } from '../consts';
 import { getStatus, Status } from '../data-tables';
+import { getNightChargeHours } from '../util';
 
 export async function dischargeLeftover(
   myTimer: Timer,
@@ -39,7 +40,7 @@ app.timer('discharge-leftover', {
 });*/
 
 async function handleFunction(context: InvocationContext) {
-  //  if battery level > 25 and current price is at least 50 öre more expensive than avg of 2 cheapest night hours, add discharge schedule for next hour
+  //  if battery level > 25 and current price is at least 50 öre more expensive than night charge mean, add discharge schedule for next hour
   const prices = await getPrices();
   const soc = await getBatterySoc();
   if (soc <= MIN_SOC) {
@@ -51,15 +52,12 @@ async function handleFunction(context: InvocationContext) {
     return;
   }
 
-  const cheapestNightMean =
-    prices
-      .slice(22, 30)
-      .sort((a, b) => (a.price > b.price ? 1 : -1))
-      .slice(0, 2)
-      .reduce((a, b) => a + b.price, 0) / 2;
+  const chargingHours = getNightChargeHours(prices);
+  const chargingHoursMean =
+    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
 
   const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
-  if (prices[currentHour].price - cheapestNightMean > 0.5) {
+  if (prices[currentHour].price - chargingHoursMean > 0.5) {
     await enqueue(
       {
         operation: Operation.StartDischarge,
