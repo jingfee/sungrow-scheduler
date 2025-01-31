@@ -68,15 +68,15 @@ export function getTargetSoc(
   if (tomorrowMostExpensiveMean - chargingHoursMean < SEK_THRESHOLD) {
     // if we charge during night due to low prices set soc to 80%
     if (chargingHoursMean < 0.1) {
-      targetSoc = 80;
+      targetSoc = 0.8;
       // else set soc to 50% and 2 charging hours to keep a backup in case of outage
     } else {
-      targetSoc = 50;
+      targetSoc = 0.5;
     }
   } else {
     // charge to 100% saturday -> sunday
     if (shouldBalanceBatteryUpper) {
-      targetSoc = 100;
+      targetSoc = 1;
     } else {
       // mean of tomorrows 3 cheapest hours
       const meanCheapest =
@@ -96,9 +96,9 @@ export function getTargetSoc(
       const diffLowHighPrice = meanMostExpensive - meanCheapest;
 
       if (diffLowHighPrice > 0.75) {
-        targetSoc = 99;
+        targetSoc = 0.99;
       } else {
-        targetSoc = 98;
+        targetSoc = 0.98;
       }
     }
   }

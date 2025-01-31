@@ -112,7 +112,7 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
     param_list: [
       {
         param_code: 10001, //soc upper limit
-        set_value: targetSoc * 10,
+        set_value: targetSoc * 1000,
       },
       {
         param_code: 10003, //energy management mode
@@ -137,7 +137,7 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
   }
 }
 
-export async function setStopBatteryChargeDischarge() {
+export async function setStopBatteryCharge() {
   if (!token) {
     await login();
   }
@@ -150,7 +150,7 @@ export async function setStopBatteryChargeDischarge() {
     uuid: process.env['DeviceUuid'],
     task_name: `${DateTime.now()
       .setZone('Europe/Stockholm')
-      .toISO()} Set stop battery charge-discharge`,
+      .toISO()} Set stop battery charge`,
     expire_second: 1800,
     param_list: [
       {
@@ -159,7 +159,7 @@ export async function setStopBatteryChargeDischarge() {
       },
       {
         param_code: 10003, //energy management mode
-        set_value: 2, //compulsory mode
+        set_value: 0, //self-consumption
       },
       {
         param_code: 10004, //charging/discharging command
@@ -180,7 +180,11 @@ export async function setStopBatteryChargeDischarge() {
   }
 }
 
-export async function setStartBatteryDischarge() {
+export async function setStartBatteryDischarge(
+  startHour: number,
+  endHour: number,
+  isWeekend: boolean
+) {
   if (!token) {
     await login();
   }
@@ -197,8 +201,55 @@ export async function setStartBatteryDischarge() {
     expire_second: 1800,
     param_list: [
       {
-        param_code: 10003, //energy management mode
-        set_value: 0, //self-consumption
+        param_code: isWeekend ? 10057 : 10048, //discharging start time 1: hour
+        set_value: startHour,
+      },
+      {
+        param_code: isWeekend ? 10059 : 10050, //weekday discharging end time 1: hour
+        set_value: endHour,
+      },
+    ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    await fetch(url, options);
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+export async function setStopBatteryDischarge() {
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/paramSetting`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    set_type: 0,
+    uuid: process.env['DeviceUuid'],
+    task_name: `${DateTime.now()
+      .setZone('Europe/Stockholm')
+      .toISO()} Set stop battery discharge`,
+    expire_second: 1800,
+    param_list: [
+      {
+        param_code: 10048, //weekday discharging start time 1: hour
+        set_value: 0,
+      },
+      {
+        param_code: 10050, //weekday discharging end time 1: hour
+        set_value: 0,
+      },
+      {
+        param_code: 10057, //weekend discharging start time 1: hour
+        set_value: 0,
+      },
+      {
+        param_code: 10059, //weekend discharging end time 1: hour
+        set_value: 0,
       },
     ],
   });

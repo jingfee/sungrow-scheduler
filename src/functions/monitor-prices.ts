@@ -86,9 +86,13 @@ export async function handleFunction(context: InvocationContext) {
     }
   }
 
-  const minRankOfRemaningDischarge = dischargeMessages
-    .filter((m) => m.body.operation === Operation.StartDischarge)
-    .sort((a, b) => (a.body.ranking > b.body.ranking ? 1 : -1))[0].body.ranking;
+  const minRankOfRemaningDischarge = (
+    dischargeMessages
+      .filter((m) => m.body.operation === Operation.StartDischarge)
+      .sort((a, b) =>
+        (a.body as Message).rank > (b.body as Message).rank ? 1 : -1
+      )[0].body as Message
+  ).rank;
 
   const rankings: Record<string, number> = {};
   for (const [index, hour] of [...dischargeHours]
@@ -106,7 +110,7 @@ export async function handleFunction(context: InvocationContext) {
       operation: Operation.StartDischarge,
     } as Message,
     {
-      operation: Operation.StopCharge,
+      operation: Operation.StopDischarge,
     } as Message
   );
 

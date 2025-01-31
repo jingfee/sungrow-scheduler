@@ -10,7 +10,8 @@ import {
   getDailyLoad,
   setStartBatteryCharge,
   setStartBatteryDischarge,
-  setStopBatteryChargeDischarge,
+  setStopBatteryCharge,
+  setStopBatteryDischarge,
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
 import { getDischargeMessages } from '../service-bus';
@@ -57,7 +58,7 @@ async function handleFunction(message: Message, context: InvocationContext) {
       await handleStartBatteryCharge(message);
       break;
     case Operation.StopCharge:
-      await handleStopBatteryCharge();
+      await handleStopBatteryCharge(message);
       break;
     case Operation.StartDischarge:
       await handleStartBatteryDischarge(message, context);
@@ -73,21 +74,12 @@ async function handleStartBatteryCharge(message: Message) {
   await setStatus(Status.Charging);
 }
 
-async function handleStopBatteryCharge() {
-  await setStopBatteryChargeDischarge();
-  await setStatus(Status.Stopped);
-  // wait 10 seconds to allow max soc to change
-  await sleep(10000);
+async function handleStopBatteryCharge(message: Message) {
   const soc = await getBatterySoc();
-  await setLatestChargeSoc(soc);
-}
+  await setStopBatteryCharge();
 
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve('wakeup');
-    }, milliseconds);
-  });
+  await setLatestChargeSoc(soc * message.targetSoc);
+  await setStatus(Status.Stopped);
 }
 
 async function handleStartBatteryDischarge(
@@ -110,19 +102,21 @@ async function handleStartBatteryDischarge(
       .filter((m) => (m.body as Message).operation === Operation.StartDischarge)
       .some((m) => m.body.rank < message.rank);
     if (hasFutureDischargeWithLowerRank) {
-      context.log('Stopping discharge');
-      await setStopBatteryChargeDischarge();
       await setStatus(Status.Stopped);
       return;
     }
   }
 
   context.log('Starting discharge');
-  await setStartBatteryDischarge();
+  const now = DateTime.now().setZone('Europe/Stockholm');
+  const startHour = now.hour;
+  const isWeekend = now.weekday === 6 || now.weekday === 7;
+  const endHour = now.plus({ hours: 1 }).hour;
+  await setStartBatteryDischarge(startHour, endHour, isWeekend);
   await setStatus(Status.Discharging);
 }
 
 async function handleStopBatteryDischarge() {
-  await setStopBatteryChargeDischarge();
+  await setStopBatteryDischarge();
   await setStatus(Status.Stopped);
 }

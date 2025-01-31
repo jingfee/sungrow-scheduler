@@ -49,18 +49,27 @@ app.timer('charge-discharge-schedule', {
 
 async function handleFunction(context: InvocationContext) {
   await clearAllMessages();
-  const messages: Record<string, Message> = {};
+  const chargeMessages: Record<string, Message> = {};
+  const dischargeMessages: Record<string, Message> = {};
   const prices = await getPrices();
-  const skipDayDischarge = await setNightCharging(prices, messages);
+  const skipDayDischarge = await setNightCharging(prices, chargeMessages);
   if (!skipDayDischarge) {
-    const hasDayCharge = await setDayChargeAndDischarge(prices, messages);
+    const hasDayCharge = await setDayChargeAndDischarge(
+      prices,
+      chargeMessages,
+      dischargeMessages
+    );
     if (!hasDayCharge) {
-      await setDayDischarge(prices, messages);
+      await setDayDischarge(prices, dischargeMessages);
     }
   }
 
-  for (const [time, message] of Object.entries(messages)) {
-    context.log('Adding message', time, JSON.stringify(message));
+  for (const [time, message] of Object.entries(chargeMessages)) {
+    context.log('Adding charge message', time, JSON.stringify(message));
+    await enqueue(message, DateTime.fromISO(time));
+  }
+  for (const [time, message] of Object.entries(dischargeMessages)) {
+    context.log('Adding discharge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
 }
@@ -95,7 +104,7 @@ async function setNightCharging(
   const skipDayDischarge = targetSoc < 0.98;
 
   const currentSoc = await getBatterySoc();
-  const chargeAmount = (targetSoc / 100 - currentSoc) * BATTERY_CAPACITY;
+  const chargeAmount = (targetSoc - currentSoc) * BATTERY_CAPACITY;
 
   if (chargeAmount <= 0) {
     // no need to charge
@@ -118,7 +127,7 @@ async function setNightCharging(
     }
   }
 
-  if (targetSoc === 100) {
+  if (targetSoc === 1) {
     await setLatestBatteryBalanceUpper(DateTime.now());
   }
 
@@ -132,6 +141,7 @@ async function setNightCharging(
     } as Message,
     {
       operation: Operation.StopCharge,
+      targetSoc,
     } as Message
   );
 
@@ -140,7 +150,8 @@ async function setNightCharging(
 
 async function setDayChargeAndDischarge(
   prices: Price[],
-  messages: Record<string, Message>
+  chargeMessages: Record<string, Message>,
+  dischargeMessages: Record<string, Message>
 ) {
   // find cheapest hour between 10:00-16:00
   // check hours from 06:00 up to cheapest hour, check hours from cheapest hour to 22:00
@@ -171,7 +182,7 @@ async function setDayChargeAndDischarge(
   const dischargeHoursBefore = moreExpensiveBefore.slice(0, 4);
   const dischargeHoursAfter = moreExpensiveAfter.slice(0, 4);
   // target soc based on the number of discharge hours after the day charge
-  const targetSoc = dischargeHoursAfter.length >= 2 ? 90 : 60;
+  const targetSoc = dischargeHoursAfter.length >= 2 ? 0.9 : 0.6;
   const nextCheapestDayPrice = sortedPrices[1];
   // only charge 2 hours instead of 1 if the price diff is small
   const numberOfChargeHours =
@@ -194,14 +205,17 @@ async function setDayChargeAndDischarge(
       : [cheapestDayPrice];
 
   for (const chargeHour of chargeHours) {
-    messages[DateTime.fromISO(chargeHour.time).toISO()] = {
+    chargeMessages[DateTime.fromISO(chargeHour.time).toISO()] = {
       operation: Operation.StartCharge,
       power: chargePower,
-      targetSoc: targetSoc,
+      targetSoc,
     } as Message;
 
-    messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] = {
+    chargeMessages[
+      DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()
+    ] = {
       operation: Operation.StopCharge,
+      targetSoc,
     } as Message;
   }
 
@@ -221,12 +235,12 @@ async function setDayChargeAndDischarge(
   addToMessageWithRank(
     dischargeHours,
     rankings,
-    messages,
+    dischargeMessages,
     {
       operation: Operation.StartDischarge,
     } as Message,
     {
-      operation: Operation.StopCharge,
+      operation: Operation.StopDischarge,
     } as Message
   );
 
