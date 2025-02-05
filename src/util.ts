@@ -21,7 +21,7 @@ export function getNightChargeHours(prices: Price[]): Price[] {
   };
 
   // Price during night is cheap - charge no matter what
-  for (let hour = 4; hour <= 2; hour--) {
+  for (let hour = 6; hour <= 4; hour--) {
     if (sortedHours[hour - 1].price < 0.1) {
       chargingHours = hour;
       break;
@@ -30,14 +30,14 @@ export function getNightChargeHours(prices: Price[]): Price[] {
 
   if (chargingHours === 0) {
     // small diff during night - charge 4 hours
-    if (nightlyMeans[4] - nightlyMeans[2] < 0.1) {
-      chargingHours = 4;
+    if (nightlyMeans[6] - nightlyMeans[4] < 0.1) {
+      chargingHours = 6;
       // mid diff during night - charge 3 hours
-    } else if (nightlyMeans[3] - nightlyMeans[2] < 0.05) {
-      chargingHours = 3;
+    } else if (nightlyMeans[5] - nightlyMeans[4] < 0.05) {
+      chargingHours = 5;
       // higher diff during night - charge 2 hours
     } else {
-      chargingHours = 2;
+      chargingHours = 4;
     }
   }
 
@@ -69,9 +69,9 @@ export function getTargetSoc(
     // if we charge during night due to low prices set soc to 80%
     if (chargingHoursMean < 0.1) {
       targetSoc = 0.8;
-      // else set soc to 50% and 2 charging hours to keep a backup in case of outage
+      // else set soc to 40% to keep a backup in case of outage
     } else {
-      targetSoc = 0.5;
+      targetSoc = 0.4;
     }
   } else {
     // charge to 100% saturday -> sunday

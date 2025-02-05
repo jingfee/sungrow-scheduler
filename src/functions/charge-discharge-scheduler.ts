@@ -18,7 +18,9 @@ import {
 import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
+  getLatestNightChargeHighPrice,
   setLatestBatteryBalanceUpper,
+  setLatestNightChargeHighPrice,
 } from '../data-tables';
 import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 
@@ -78,15 +80,15 @@ async function setNightCharging(
   prices: Price[],
   messages: Record<string, Message>
 ) {
-  //  find cheapest 2, 3 and 4 hours between 22:00 - 06:00
+  //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
   //  if mean over 4 cheapest hours is less than 10 öre, always charge 4 hours
   //  else
   //    calc mean of those sets of hours
-  //    diff avg of tomorrow 4 most expensive hours and night 2 cheapest hours
+  //    diff avg of tomorrow 6 most expensive hours and night 4 cheapest hours
   //    if diff < SEK_THRESHOLD, set targetsoc to 50%, 2 charge hours and skip day discharge else full charge and allow day discharge
-  //    charge 4 hours if diff avg4 and avg2 less than 10 öre
-  //    charge 3 hours if diff avg3 and avg2 less than 5 öre
-  //    else charge 2 hours
+  //    charge 6 hours if diff avg6 and avg4 less than 10 öre
+  //    charge 5 hours if diff avg5 and avg4 less than 5 öre
+  //    else charge 4 hours
   //  targetsoc 100% if saturday -> sunday
   //  targetsoc 99% if diff most expensive and cheapest hour is more than 75 öre
   //  targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
@@ -116,7 +118,7 @@ async function setNightCharging(
   while (chargeHours.length > 1) {
     if (chargingPower < 800) {
       chargeHours = chargeHours
-        .sort((a, b) => (a.price > b.price ? 1 : -1))
+        .sort((a, b) => (a.price < b.price ? 1 : -1))
         .slice(1)
         .sort((a, b) => (a.time > b.time ? 1 : -1));
 
@@ -145,6 +147,10 @@ async function setNightCharging(
     } as Message
   );
 
+  const highPrice = chargeHours.sort((a, b) => (a.price < b.price ? 1 : -1))[0]
+    .price;
+  await setLatestNightChargeHighPrice(highPrice);
+
   return skipDayDischarge;
 }
 
@@ -155,8 +161,8 @@ async function setDayChargeAndDischarge(
 ) {
   // find cheapest hour between 10:00-16:00
   // check hours from 06:00 up to cheapest hour, check hours from cheapest hour to 22:00
-  // check if at least 2 hours before and after thats at least SEK_THRESHOLD more expensive
-  // identify up to 3 hours before and up to 3 hours after that are at least SEK_THRESHOLD more expensive
+  // check if at least 5 hours before and after thats at least SEK_THRESHOLD more expensive, min 1 hour before and min 1 hour after
+  // identify up to 5 hours before and up to 5 hours after that are at least SEK_THRESHOLD more expensive
 
   const sortedPrices = prices
     .slice(34, 40) //tomorrow 10:00 - 16:00
@@ -174,28 +180,52 @@ async function setDayChargeAndDischarge(
     .filter((p) => p.price - cheapestDayPrice.price >= SEK_THRESHOLD)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
-  if (moreExpensiveBefore.length < 2 || moreExpensiveAfter.length < 2) {
+  if (
+    moreExpensiveBefore.length + moreExpensiveAfter.length < 5 ||
+    moreExpensiveBefore.length === 0 ||
+    moreExpensiveAfter.length === 0
+  ) {
     return false;
   }
 
-  // choose up to 4 hours before and after cheapest hour to discharge
-  const dischargeHoursBefore = moreExpensiveBefore.slice(0, 4);
-  const dischargeHoursAfter = moreExpensiveAfter.slice(0, 4);
+  // choose up to 6 hours before and after cheapest hour to discharge
+  const dischargeHoursBefore = moreExpensiveBefore.slice(0, 6);
+  const dischargeHoursAfter = moreExpensiveAfter.slice(0, 6);
   // target soc based on the number of discharge hours after the day charge
-  const targetSoc = dischargeHoursAfter.length >= 2 ? 0.9 : 0.6;
+  const targetSocTable = {
+    1: 0.35,
+    2: 0.45,
+    3: 0.55,
+    4: 0.65,
+    5: 0.75,
+    6: 0.85,
+  };
+  const chargePowerTable = {
+    1: {
+      1: 3000,
+      2: 3750,
+      3: 4500,
+      4: 5000,
+      5: 5000,
+      6: 5000,
+    },
+    2: {
+      1: 2000,
+      2: 2750,
+      3: 3500,
+      4: 4250,
+      5: 5000,
+      6: 5000,
+    },
+  };
+  const targetSoc = targetSocTable[dischargeHoursAfter.length];
   const nextCheapestDayPrice = sortedPrices[1];
   // only charge 2 hours instead of 1 if the price diff is small
   const numberOfChargeHours =
     nextCheapestDayPrice.price - cheapestDayPrice.price <= 0.05 ? 2 : 1;
   // chargepower based on the 1 or 2 charge hours and the numbers of dischargehoursbefore
   const chargePower =
-    numberOfChargeHours === 2
-      ? dischargeHoursBefore.length >= 3
-        ? 5000
-        : 3000
-      : dischargeHoursBefore.length >= 2
-      ? 5000
-      : 3000;
+    chargePowerTable[numberOfChargeHours][dischargeHoursBefore.length];
 
   const chargeHours =
     numberOfChargeHours === 2
@@ -251,12 +281,15 @@ async function setDayDischarge(
   prices: Price[],
   messages: Record<string, Message>
 ) {
-  //  find 4 most expensive hours between 06:00-22:00
+  //  find 8 most expensive hours between 06:00-22:00
   //  add message to bus to discharge at most expensive hours
+
+  const latestNightChargeHighPrice = await getLatestNightChargeHighPrice();
 
   const dischargeHoursPriceSorted = prices
     .slice(30, 46) // 06:00 to 22:00
     .sort((a, b) => (a.price < b.price ? 1 : -1))
+    .filter((p) => p.price > latestNightChargeHighPrice)
     .slice(0, 5);
 
   const rankings: Record<string, number> = {};
