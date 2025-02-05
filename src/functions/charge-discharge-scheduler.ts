@@ -18,7 +18,9 @@ import {
 import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
+  getLatestNightChargeHighPrice,
   setLatestBatteryBalanceUpper,
+  setLatestNightChargeHighPrice,
 } from '../data-tables';
 import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 
@@ -116,7 +118,7 @@ async function setNightCharging(
   while (chargeHours.length > 1) {
     if (chargingPower < 800) {
       chargeHours = chargeHours
-        .sort((a, b) => (a.price > b.price ? 1 : -1))
+        .sort((a, b) => (a.price < b.price ? 1 : -1))
         .slice(1)
         .sort((a, b) => (a.time > b.time ? 1 : -1));
 
@@ -144,6 +146,10 @@ async function setNightCharging(
       targetSoc,
     } as Message
   );
+
+  const highPrice = chargeHours.sort((a, b) => (a.price < b.price ? 1 : -1))[0]
+    .price;
+  await setLatestNightChargeHighPrice(highPrice);
 
   return skipDayDischarge;
 }
@@ -254,9 +260,12 @@ async function setDayDischarge(
   //  find 4 most expensive hours between 06:00-22:00
   //  add message to bus to discharge at most expensive hours
 
+  const latestNightChargeHighPrice = await getLatestNightChargeHighPrice();
+
   const dischargeHoursPriceSorted = prices
     .slice(30, 46) // 06:00 to 22:00
     .sort((a, b) => (a.price < b.price ? 1 : -1))
+    .filter((p) => p.price > latestNightChargeHighPrice)
     .slice(0, 5);
 
   const rankings: Record<string, number> = {};
