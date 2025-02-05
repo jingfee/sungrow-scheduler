@@ -20,9 +20,19 @@ export function getNightChargeHours(prices: Price[]): Price[] {
     8: sortedHours.slice(0, 8).reduce((a, b) => a + b.price, 0) / 8,
   };
 
+  const nightlyDiffs = {
+    2: sortedHours[0].price - sortedHours[1].price,
+    3: sortedHours[0].price - sortedHours[2].price,
+    4: sortedHours[0].price - sortedHours[3].price,
+    5: sortedHours[0].price - sortedHours[4].price,
+    6: sortedHours[0].price - sortedHours[5].price,
+    7: sortedHours[0].price - sortedHours[6].price,
+    8: sortedHours[0].price - sortedHours[7].price,
+  };
+
   // Price during night is cheap - charge no matter what
   for (let hour = 4; hour <= 2; hour--) {
-    if (nightlyMeans[hour] < 0.1) {
+    if (nightlyMeans[hour] < 0.1 && nightlyDiffs[hour] < 0.1) {
       chargingHours = hour;
       break;
     }
