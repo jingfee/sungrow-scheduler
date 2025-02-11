@@ -95,7 +95,7 @@ async function setNightCharging(
 
   const latestBalanceUpper = await getLatestBatteryBalanceUpper();
   const diff = DateTime.now().diff(latestBalanceUpper, 'days').toObject();
-  const shouldBalanceBatteryUpper = diff.days >= 7;
+  const shouldBalanceBatteryUpper = Math.ceil(diff.days) >= 7;
 
   let chargeHours = getNightChargeHours(prices);
   const targetSoc = getTargetSoc(
