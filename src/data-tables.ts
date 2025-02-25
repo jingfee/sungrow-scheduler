@@ -53,22 +53,6 @@ export async function getStatus(): Promise<Status> {
   return parseInt(entity.value as string);
 }
 
-export async function setLatestNightChargeHighPrice(price: number) {
-  await _client.upsertEntity({
-    partitionKey: TableKeys.LatestNightChargeHighPrice,
-    rowKey: '',
-    value: price.toString(),
-  });
-}
-
-export async function getLatestNightChargeHighPrice() {
-  const entity = await _client.getEntity(
-    TableKeys.LatestNightChargeHighPrice,
-    ''
-  );
-  return parseInt(entity.value as string);
-}
-
 enum TableKeys {
   LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
   LatestChargeSoc = 'LatestChargeSoc',

@@ -1,9 +1,17 @@
-import { SEK_THRESHOLD } from './consts';
+import { BATTERY_UPGRADED } from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
 
 export function getNightChargeHours(prices: Price[]): Price[] {
+  //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
+  //  if any mean over cheapest hours is less than 10 öre, always charge those hours
+  //  charge 6 hours if diff avg6 and avg4 less than 10 öre
+  //  charge 5 hours if diff avg5 and avg4 less than 5 öre
+  //  else charge 4 hours
+
+  const maxChargeHours = BATTERY_UPGRADED ? 6 : 4;
+
   let chargingHours = 0;
 
   const sortedHours = prices
@@ -16,12 +24,10 @@ export function getNightChargeHours(prices: Price[]): Price[] {
     4: sortedHours.slice(0, 4).reduce((a, b) => a + b.price, 0) / 4,
     5: sortedHours.slice(0, 5).reduce((a, b) => a + b.price, 0) / 5,
     6: sortedHours.slice(0, 6).reduce((a, b) => a + b.price, 0) / 6,
-    7: sortedHours.slice(0, 7).reduce((a, b) => a + b.price, 0) / 7,
-    8: sortedHours.slice(0, 8).reduce((a, b) => a + b.price, 0) / 8,
   };
 
   // Price during night is cheap - charge no matter what
-  for (let hour = 4; hour <= 2; hour--) {
+  for (let hour = maxChargeHours; hour <= maxChargeHours - 2; hour--) {
     if (sortedHours[hour - 1].price < 0.1) {
       chargingHours = hour;
       break;
@@ -30,14 +36,17 @@ export function getNightChargeHours(prices: Price[]): Price[] {
 
   if (chargingHours === 0) {
     // small diff during night - charge 4 hours
-    if (nightlyMeans[4] - nightlyMeans[2] < 0.1) {
-      chargingHours = 4;
+    if (nightlyMeans[maxChargeHours] - nightlyMeans[maxChargeHours - 2] < 0.1) {
+      chargingHours = maxChargeHours;
       // mid diff during night - charge 3 hours
-    } else if (nightlyMeans[3] - nightlyMeans[2] < 0.05) {
-      chargingHours = 3;
+    } else if (
+      nightlyMeans[maxChargeHours - 1] - nightlyMeans[maxChargeHours - 2] <
+      0.05
+    ) {
+      chargingHours = maxChargeHours - 1;
       // higher diff during night - charge 2 hours
     } else {
-      chargingHours = 2;
+      chargingHours = maxChargeHours - 2;
     }
   }
 
@@ -51,28 +60,31 @@ export function getNightChargeHours(prices: Price[]): Price[] {
 export function getTargetSoc(
   prices: Price[],
   chargingHours: Price[],
+  dischargeHours: number,
   shouldBalanceBatteryUpper: boolean
 ): number {
+  // if no dischargehours set targetsoc to 80% if cheap charging, else 40%
+  // if dischargehours < 3 set targetsoc to 60%
+  // if balance battery set targetsoc 100%
+  // targetsoc 99% if diff most expensive and cheapest hour is more than 75 öre
+  // targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
+
   let targetSoc = 0;
   const chargingHoursMean =
     chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
 
-  const tomorrowMostExpensiveMean =
-    prices
-      .slice(24) // 00:00 to 23:00 next day
-      .sort((a, b) => (a.price < b.price ? 1 : -1))
-      .slice(0, 4)
-      .reduce((a, b) => a + b.price, 0) / 4;
-
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
-  if (tomorrowMostExpensiveMean - chargingHoursMean < SEK_THRESHOLD) {
+  if (dischargeHours === 0) {
     // if we charge during night due to low prices set soc to 80%
     if (chargingHoursMean < 0.1) {
       targetSoc = 0.8;
-      // else set soc to 50% and 2 charging hours to keep a backup in case of outage
+      // else set soc to 40% to keep a backup in case of outage
     } else {
-      targetSoc = 0.5;
+      targetSoc = 0.4;
     }
+  } else if (BATTERY_UPGRADED && dischargeHours < 3) {
+    // if only 1 or 2 hour discharge only partially charge
+    targetSoc = 0.6;
   } else {
     // charge to 100% saturday -> sunday
     if (shouldBalanceBatteryUpper) {
