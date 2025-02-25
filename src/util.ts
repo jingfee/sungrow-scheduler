@@ -1,4 +1,4 @@
-import { SEK_THRESHOLD } from './consts';
+import { BATTERY_UPGRADED } from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
@@ -10,6 +10,8 @@ export function getNightChargeHours(prices: Price[]): Price[] {
   //  charge 5 hours if diff avg5 and avg4 less than 5 öre
   //  else charge 4 hours
 
+  const maxChargeHours = BATTERY_UPGRADED ? 6 : 4;
+
   let chargingHours = 0;
 
   const sortedHours = prices
@@ -17,13 +19,15 @@ export function getNightChargeHours(prices: Price[]): Price[] {
     .sort((a, b) => (a.price > b.price ? 1 : -1));
 
   const nightlyMeans = {
+    2: sortedHours.slice(0, 2).reduce((a, b) => a + b.price, 0) / 2,
+    3: sortedHours.slice(0, 3).reduce((a, b) => a + b.price, 0) / 3,
     4: sortedHours.slice(0, 4).reduce((a, b) => a + b.price, 0) / 4,
     5: sortedHours.slice(0, 5).reduce((a, b) => a + b.price, 0) / 5,
     6: sortedHours.slice(0, 6).reduce((a, b) => a + b.price, 0) / 6,
   };
 
   // Price during night is cheap - charge no matter what
-  for (let hour = 6; hour <= 4; hour--) {
+  for (let hour = maxChargeHours; hour <= maxChargeHours - 2; hour--) {
     if (sortedHours[hour - 1].price < 0.1) {
       chargingHours = hour;
       break;
@@ -32,14 +36,17 @@ export function getNightChargeHours(prices: Price[]): Price[] {
 
   if (chargingHours === 0) {
     // small diff during night - charge 4 hours
-    if (nightlyMeans[6] - nightlyMeans[4] < 0.1) {
-      chargingHours = 6;
+    if (nightlyMeans[maxChargeHours] - nightlyMeans[maxChargeHours - 2] < 0.1) {
+      chargingHours = maxChargeHours;
       // mid diff during night - charge 3 hours
-    } else if (nightlyMeans[5] - nightlyMeans[4] < 0.05) {
-      chargingHours = 5;
+    } else if (
+      nightlyMeans[maxChargeHours - 1] - nightlyMeans[maxChargeHours - 2] <
+      0.05
+    ) {
+      chargingHours = maxChargeHours - 1;
       // higher diff during night - charge 2 hours
     } else {
-      chargingHours = 4;
+      chargingHours = maxChargeHours - 2;
     }
   }
 
@@ -75,7 +82,7 @@ export function getTargetSoc(
     } else {
       targetSoc = 0.4;
     }
-  } else if (dischargeHours < 3) {
+  } else if (BATTERY_UPGRADED && dischargeHours < 3) {
     // if only 1 or 2 hour discharge only partially charge
     targetSoc = 0.6;
   } else {
