@@ -182,12 +182,30 @@ export async function setStopBatteryCharge() {
 
 export async function setStartBatteryDischarge(
   startHour: number,
-  endHour: number,
-  isWeekend: boolean
+  endHour: number
 ) {
+  const taskName = `${DateTime.now()
+    .setZone('Europe/Stockholm')
+    .toISO()} Set start battery discharge`;
+  await setBatteryDischargeEndTime(endHour, `${taskName} end`);
+  await setBatteryDischargeStartTime(startHour, `${taskName} start`);
+}
+
+export async function setStopBatteryDischarge() {
+  const taskName = `${DateTime.now()
+    .setZone('Europe/Stockholm')
+    .toISO()} Set stop battery discharge`;
+  await setBatteryDischargeStartTime(0, `${taskName} start`);
+  await setBatteryDischargeEndTime(0, `${taskName} end`);
+}
+
+async function setBatteryDischargeStartTime(hour: number, taskName: string) {
   if (!token) {
     await login();
   }
+
+  const now = DateTime.now().setZone('Europe/Stockholm');
+  const isWeekend = now.weekday === 6 || now.weekday === 7;
 
   const url = `${baseUrl}/paramSetting`;
   const body = JSON.stringify({
@@ -195,18 +213,12 @@ export async function setStartBatteryDischarge(
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: `${DateTime.now()
-      .setZone('Europe/Stockholm')
-      .toISO()} Set start battery discharge`,
+    task_name: taskName,
     expire_second: 1800,
     param_list: [
       {
         param_code: isWeekend ? 10057 : 10048, //discharging start time 1: hour
-        set_value: startHour,
-      },
-      {
-        param_code: isWeekend ? 10059 : 10050, //weekday discharging end time 1: hour
-        set_value: endHour,
+        set_value: hour,
       },
     ],
   });
@@ -219,10 +231,13 @@ export async function setStartBatteryDischarge(
   }
 }
 
-export async function setStopBatteryDischarge() {
+async function setBatteryDischargeEndTime(hour: number, taskName: string) {
   if (!token) {
     await login();
   }
+
+  const now = DateTime.now().setZone('Europe/Stockholm');
+  const isWeekend = now.weekday === 6 || now.weekday === 7;
 
   const url = `${baseUrl}/paramSetting`;
   const body = JSON.stringify({
@@ -230,26 +245,12 @@ export async function setStopBatteryDischarge() {
     token,
     set_type: 0,
     uuid: process.env['DeviceUuid'],
-    task_name: `${DateTime.now()
-      .setZone('Europe/Stockholm')
-      .toISO()} Set stop battery discharge`,
+    task_name: taskName,
     expire_second: 1800,
     param_list: [
       {
-        param_code: 10048, //weekday discharging start time 1: hour
-        set_value: 24,
-      },
-      {
-        param_code: 10050, //weekday discharging end time 1: hour
-        set_value: 24,
-      },
-      {
-        param_code: 10057, //weekend discharging start time 1: hour
-        set_value: 24,
-      },
-      {
-        param_code: 10059, //weekend discharging end time 1: hour
-        set_value: 24,
+        param_code: isWeekend ? 10059 : 10050, //weekday discharging end time 1: hour
+        set_value: hour,
       },
     ],
   });

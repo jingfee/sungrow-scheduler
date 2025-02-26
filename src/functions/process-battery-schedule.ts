@@ -110,9 +110,8 @@ async function handleStartBatteryDischarge(
   context.log('Starting discharge');
   const now = DateTime.now().setZone('Europe/Stockholm');
   const startHour = now.hour;
-  const isWeekend = now.weekday === 6 || now.weekday === 7;
   const endHour = now.plus({ hours: 1 }).hour;
-  await setStartBatteryDischarge(startHour, endHour, isWeekend);
+  await setStartBatteryDischarge(startHour, endHour);
   await setStatus(Status.Discharging);
 }
 
