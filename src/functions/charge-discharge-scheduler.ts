@@ -59,7 +59,7 @@ async function handleFunction(context: InvocationContext) {
   const prices = await getPrices();
 
   const nightChargeHours = getNightChargeHours(prices);
-  const highestNightChargeHour = nightChargeHours.sort((a, b) =>
+  const highestNightChargeHour = [...nightChargeHours].sort((a, b) =>
     a.price < b.price ? 1 : -1
   )[0].price;
   let dischargeHours = await setDayChargeAndDischarge(

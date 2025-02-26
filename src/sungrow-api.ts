@@ -237,19 +237,19 @@ export async function setStopBatteryDischarge() {
     param_list: [
       {
         param_code: 10048, //weekday discharging start time 1: hour
-        set_value: 0,
+        set_value: 24,
       },
       {
         param_code: 10050, //weekday discharging end time 1: hour
-        set_value: 0,
+        set_value: 24,
       },
       {
         param_code: 10057, //weekend discharging start time 1: hour
-        set_value: 0,
+        set_value: 24,
       },
       {
         param_code: 10059, //weekend discharging end time 1: hour
-        set_value: 0,
+        set_value: 24,
       },
     ],
   });
