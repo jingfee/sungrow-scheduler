@@ -14,7 +14,7 @@ import {
   setStopBatteryDischarge,
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
-import { getDischargeMessages } from '../service-bus';
+import { getChargeAndDischargeMessages } from '../service-bus';
 import {
   getLatestChargeSoc,
   setLatestChargeSoc,
@@ -97,9 +97,21 @@ async function handleStartBatteryDischarge(
 
   context.log(`Rank: ${message.rank} Hours: ${hours}`);
   if (message.rank != undefined && message.rank >= hours) {
-    const dischargeMessages = await getDischargeMessages();
-    const hasFutureDischargeWithLowerRank = dischargeMessages
-      .filter((m) => (m.body as Message).operation === Operation.StartDischarge)
+    const messages = await getChargeAndDischargeMessages();
+    const nextChargeMessage =
+      messages.chargeMessages.length > 0
+        ? messages.chargeMessages.sort((a, b) =>
+            a.scheduledEnqueueTimeUtc > b.scheduledEnqueueTimeUtc ? 1 : -1
+          )[0]
+        : undefined;
+    const hasFutureDischargeWithLowerRank = messages.dischargeMessages
+      .filter(
+        (m) =>
+          (m.body as Message).operation === Operation.StartDischarge &&
+          (!nextChargeMessage ||
+            m.scheduledEnqueueTimeUtc <
+              nextChargeMessage.scheduledEnqueueTimeUtc)
+      )
       .some((m) => m.body.rank < message.rank);
     if (hasFutureDischargeWithLowerRank) {
       await setStatus(Status.Stopped);

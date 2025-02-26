@@ -26,10 +26,12 @@ export async function clearAllMessages() {
   }
 }
 
-export async function getDischargeMessages(): Promise<
-  ServiceBusReceivedMessage[]
-> {
+export async function getChargeAndDischargeMessages(): Promise<{
+  dischargeMessages: ServiceBusReceivedMessage[];
+  chargeMessages: ServiceBusReceivedMessage[];
+}> {
   const dischargeMessages = [];
+  const chargeMessages = [];
   const peekedMessages = await _receiver.peekMessages(100);
   for (const peekedMessage of peekedMessages) {
     if (
@@ -37,9 +39,14 @@ export async function getDischargeMessages(): Promise<
       (peekedMessage.body as Message).operation === Operation.StopDischarge
     ) {
       dischargeMessages.push(peekedMessage);
+    } else if (
+      (peekedMessage.body as Message).operation === Operation.StartCharge ||
+      (peekedMessage.body as Message).operation === Operation.StopCharge
+    ) {
+      chargeMessages.push(peekedMessage);
     }
   }
-  return dischargeMessages;
+  return { dischargeMessages, chargeMessages };
 }
 
 export async function clearMessage(sequenceNumber) {
