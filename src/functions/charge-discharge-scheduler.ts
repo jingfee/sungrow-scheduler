@@ -18,7 +18,9 @@ import {
 import { getBatterySoc } from '../sungrow-api';
 import {
   getLatestBatteryBalanceUpper,
+  getLatestNightChargeHighPrice,
   setLatestBatteryBalanceUpper,
+  setLatestNightChargeHighPrice,
 } from '../data-tables';
 import {
   BATTERY_CAPACITY,
@@ -155,6 +157,10 @@ async function setNightCharging(
       targetSoc,
     } as Message
   );
+
+  const highPrice = chargeHours.sort((a, b) => (a.price < b.price ? 1 : -1))[0]
+    .price;
+  await setLatestNightChargeHighPrice(highPrice);
 }
 
 async function setDayChargeAndDischarge(
@@ -272,13 +278,22 @@ async function setDayDischarge(
   //  find all hours between 06:00-22:00 SEK_THRESHOLD more expensive than highest charge price
   //  add message to bus to discharge at most expensive hours
 
-  const dischargeHoursPriceSorted = prices
+  let dischargeHoursPriceSorted = prices
     .slice(30, 46) // 06:00 to 22:00
     .sort((a, b) => (a.price < b.price ? 1 : -1))
     .filter((p) => p.price >= highestNightChargePrice + SEK_THRESHOLD);
+  let skipNightCharge = false;
 
   if (dischargeHoursPriceSorted.length === 0) {
-    return 0;
+    const soc = await getBatterySoc();
+    if (soc >= 0.4) {
+      const latestNightChargeHighPrice = await getLatestNightChargeHighPrice();
+      dischargeHoursPriceSorted = prices
+        .slice(30, 46) // 06:00 to 22:00
+        .sort((a, b) => (a.price < b.price ? 1 : -1))
+        .filter((p) => p.price >= latestNightChargeHighPrice + SEK_THRESHOLD);
+    }
+    skipNightCharge = true;
   }
 
   const rankings: Record<string, number> = {};
@@ -302,5 +317,5 @@ async function setDayDischarge(
     } as Message
   );
 
-  return dischargeHoursDateSorted.length;
+  return skipNightCharge ? 0 : dischargeHoursDateSorted.length;
 }

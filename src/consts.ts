@@ -1,6 +1,6 @@
 export const BATTERY_UPGRADED = false;
 
-export const SEK_THRESHOLD = 0.3;
+export const SEK_THRESHOLD = 0.4;
 export const MIN_SOC = 0.25;
 export const BATTERY_CAPACITY = BATTERY_UPGRADED ? 25600 : 9600;
 
