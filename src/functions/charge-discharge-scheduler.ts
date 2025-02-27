@@ -169,13 +169,13 @@ async function setDayChargeAndDischarge(
   chargeMessages: Record<string, Message>,
   dischargeMessages: Record<string, Message>
 ) {
-  // find cheapest hour between 10:00-16:00
+  // find cheapest hour between 10:00-17:00
   // check hours from 06:00 up to cheapest hour, check hours from cheapest hour to 22:00
   // check if at least 5 hours before and after thats at least SEK_THRESHOLD more expensive than max charge price (day and night), min 1 hour before and min 1 hour after
   // identify up to 6 hours before and up to 6 hours after that are at least SEK_THRESHOLD more expensive
 
   const sortedPrices = prices
-    .slice(34, 40) //tomorrow 10:00 - 16:00
+    .slice(34, 41) //tomorrow 10:00 - 17:00
     .sort((a, b) => (a.price > b.price ? 1 : -1));
   const cheapestDayChargePrice = sortedPrices[0];
 

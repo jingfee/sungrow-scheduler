@@ -13,7 +13,7 @@ export const DAY_CHARGE_TARGET_SOC_TABLE = BATTERY_UPGRADED
       5: 0.75,
       6: 0.85,
     }
-  : { 1: 0.7, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1 };
+  : { 1: 0.6, 2: 0.8, 3: 0.9, 4: 0.9, 5: 0.9, 6: 0.9 };
 export const DAY_CHARGE_CHARGE_POWER_TABLE = BATTERY_UPGRADED
   ? {
       1: {
