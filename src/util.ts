@@ -1,4 +1,9 @@
-import { BATTERY_UPGRADED } from './consts';
+import {
+  BATTERY_CAPACITY,
+  BATTERY_UPGRADED,
+  CHARGE_ENERGY_PER_HOUR,
+  MIN_SOC,
+} from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
@@ -82,35 +87,41 @@ export function getTargetSoc(
     } else {
       targetSoc = 0.4;
     }
-  } else if (BATTERY_UPGRADED && dischargeHours < 3) {
-    // if only 1 or 2 hour discharge only partially charge
-    targetSoc = 0.6;
   } else {
-    // charge to 100% saturday -> sunday
-    if (shouldBalanceBatteryUpper) {
-      targetSoc = 1;
-    } else {
-      // mean of tomorrows 3 cheapest hours
-      const meanCheapest =
-        prices
-          .slice(24)
-          .sort((a, b) => (a.price > b.price ? 1 : -1))
-          .slice(0, 3)
-          .reduce((a, b) => a + b.price, 0) / 3;
-      // mean of tomorrows 7 most expensive hours
-      const meanMostExpensive =
-        prices
-          .slice(24)
-          .sort((a, b) => (a.price < b.price ? 1 : -1))
-          .slice(0, 7)
-          .reduce((a, b) => a + b.price, 0) / 7;
+    const energyPerHour = CHARGE_ENERGY_PER_HOUR;
+    const totalEnergy = energyPerHour * dischargeHours;
+    targetSoc = Math.min(
+      (BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY,
+      1
+    );
 
-      const diffLowHighPrice = meanMostExpensive - meanCheapest;
-
-      if (diffLowHighPrice > 0.75) {
-        targetSoc = 0.99;
+    if (targetSoc >= 1) {
+      // charge to 100% saturday -> sunday
+      if (shouldBalanceBatteryUpper) {
+        targetSoc = 1;
       } else {
-        targetSoc = 0.98;
+        // mean of tomorrows 3 cheapest hours
+        const meanCheapest =
+          prices
+            .slice(24)
+            .sort((a, b) => (a.price > b.price ? 1 : -1))
+            .slice(0, 3)
+            .reduce((a, b) => a + b.price, 0) / 3;
+        // mean of tomorrows 7 most expensive hours
+        const meanMostExpensive =
+          prices
+            .slice(24)
+            .sort((a, b) => (a.price < b.price ? 1 : -1))
+            .slice(0, 7)
+            .reduce((a, b) => a + b.price, 0) / 7;
+
+        const diffLowHighPrice = meanMostExpensive - meanCheapest;
+
+        if (diffLowHighPrice > 0.75) {
+          targetSoc = 0.99;
+        } else {
+          targetSoc = 0.98;
+        }
       }
     }
   }

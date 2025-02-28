@@ -1,19 +1,11 @@
 export const BATTERY_UPGRADED = false;
 
-export const SEK_THRESHOLD = 0.4;
+export const SEK_THRESHOLD = 0.3;
 export const MIN_SOC = 0.25;
 export const BATTERY_CAPACITY = BATTERY_UPGRADED ? 25600 : 9600;
+// TODO: ADAPT THIS BASED ON WEATHER/PREVIOUS LOAD
+export const CHARGE_ENERGY_PER_HOUR = 3000;
 
-export const DAY_CHARGE_TARGET_SOC_TABLE = BATTERY_UPGRADED
-  ? {
-      1: 0.35,
-      2: 0.45,
-      3: 0.55,
-      4: 0.65,
-      5: 0.75,
-      6: 0.85,
-    }
-  : { 1: 0.6, 2: 0.8, 3: 0.9, 4: 0.9, 5: 0.9, 6: 0.9 };
 export const DAY_CHARGE_CHARGE_POWER_TABLE = BATTERY_UPGRADED
   ? {
       1: {

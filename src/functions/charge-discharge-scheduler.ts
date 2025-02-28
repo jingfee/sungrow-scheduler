@@ -24,8 +24,9 @@ import {
 } from '../data-tables';
 import {
   BATTERY_CAPACITY,
+  CHARGE_ENERGY_PER_HOUR,
   DAY_CHARGE_CHARGE_POWER_TABLE,
-  DAY_CHARGE_TARGET_SOC_TABLE,
+  MIN_SOC,
   SEK_THRESHOLD,
 } from '../consts';
 
@@ -209,7 +210,13 @@ async function setDayChargeAndDischarge(
   const dischargeHoursAfter = moreExpensiveAfter.slice(0, 6);
   // target soc based on the number of discharge hours after the day charge
 
-  const targetSoc = DAY_CHARGE_TARGET_SOC_TABLE[moreExpensiveAfter.length];
+  const energyPerHour = CHARGE_ENERGY_PER_HOUR;
+  const totalEnergy = energyPerHour * dischargeHoursAfter.length;
+  const targetSoc = Math.min(
+    (BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY,
+    0.9
+  );
+
   const nextCheapestDayPrice = sortedPrices[1];
   // only charge 2 hours instead of 1 if the price diff is small
   const numberOfChargeHours =
