@@ -25,7 +25,6 @@ import {
 import {
   BATTERY_CAPACITY,
   CHARGE_ENERGY_PER_HOUR,
-  DAY_CHARGE_CHARGE_POWER_TABLE,
   MIN_SOC,
   SEK_THRESHOLD,
 } from '../consts';
@@ -222,10 +221,22 @@ async function setDayChargeAndDischarge(
   const numberOfChargeHours =
     nextCheapestDayPrice.price - cheapestDayChargePrice.price <= 0.05 ? 2 : 1;
   // chargepower based on the 1 or 2 charge hours and the numbers of dischargehoursbefore
-  const chargePower =
-    DAY_CHARGE_CHARGE_POWER_TABLE[numberOfChargeHours][
-      dischargeHoursBefore.length
-    ];
+  const estimatedSocAfterDischarge = Math.max(
+    (BATTERY_CAPACITY - CHARGE_ENERGY_PER_HOUR * dischargeHoursBefore.length) /
+      BATTERY_CAPACITY,
+    MIN_SOC
+  );
+
+  const chargeAmount =
+    (targetSoc - estimatedSocAfterDischarge) * BATTERY_CAPACITY;
+  if (chargeAmount <= 0) {
+    // no need to charge
+    return 0;
+  }
+  const chargePower = Math.max(
+    Math.ceil(((chargeAmount / numberOfChargeHours) * 1.15) / 100) * 100,
+    5000
+  );
 
   const chargeHours =
     numberOfChargeHours === 2
