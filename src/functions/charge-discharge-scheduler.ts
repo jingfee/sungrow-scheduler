@@ -28,6 +28,7 @@ import {
   MIN_SOC,
   SEK_THRESHOLD,
 } from '../consts';
+import { getProductionForecast } from '../solcast';
 
 export async function chargeDischargeSchedule(
   myTimer: Timer,
@@ -55,6 +56,8 @@ app.timer('charge-discharge-schedule', {
 });*/
 
 async function handleFunction(context: InvocationContext) {
+  const forecast = await getProductionForecast();
+  context.log(forecast);
   await clearAllMessages();
   const chargeMessages: Record<string, Message> = {};
   const dischargeMessages: Record<string, Message> = {};
@@ -82,7 +85,8 @@ async function handleFunction(context: InvocationContext) {
     prices,
     nightChargeHours,
     dischargeHours,
-    chargeMessages
+    chargeMessages,
+    context
   );
 
   for (const [time, message] of Object.entries(chargeMessages)) {
@@ -99,7 +103,8 @@ async function setNightCharging(
   prices: Price[],
   chargeHours: Price[],
   dischargeHours: number,
-  messages: Record<string, Message>
+  messages: Record<string, Message>,
+  context: InvocationContext
 ) {
   // get target_soc based on number of dischargehours, mean of chargehours and if at least 7 days since last balancing (100% charge)
   // calc charge amount from currentsoc, targetsoc and battery capacity
@@ -109,11 +114,12 @@ async function setNightCharging(
   const diff = DateTime.now().diff(latestBalanceUpper, 'days').toObject();
   const shouldBalanceBatteryUpper = Math.ceil(diff.days) >= 7;
 
-  const targetSoc = getTargetSoc(
+  const targetSoc = await getTargetSoc(
     prices,
     chargeHours,
     dischargeHours,
-    shouldBalanceBatteryUpper
+    shouldBalanceBatteryUpper,
+    context
   );
 
   const currentSoc = await getBatterySoc();

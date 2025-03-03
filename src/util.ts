@@ -7,6 +7,8 @@ import {
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
+import { getProductionForecast } from './solcast';
+import { InvocationContext } from '@azure/functions';
 
 export function getNightChargeHours(prices: Price[]): Price[] {
   //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
@@ -62,12 +64,13 @@ export function getNightChargeHours(prices: Price[]): Price[] {
   return chargeHours;
 }
 
-export function getTargetSoc(
+export async function getTargetSoc(
   prices: Price[],
   chargingHours: Price[],
   dischargeHours: number,
-  shouldBalanceBatteryUpper: boolean
-): number {
+  shouldBalanceBatteryUpper: boolean,
+  context: InvocationContext
+): Promise<number> {
   // if no dischargehours set targetsoc to 80% if cheap charging, else 40%
   // if dischargehours < 3 set targetsoc to 60%
   // if balance battery set targetsoc 100%
@@ -75,19 +78,9 @@ export function getTargetSoc(
   // targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
 
   let targetSoc = 0;
-  const chargingHoursMean =
-    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
 
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
-  if (dischargeHours === 0) {
-    // if we charge during night due to low prices set soc to 80%
-    if (chargingHoursMean < 0.1) {
-      targetSoc = 0.8;
-      // else set soc to 40% to keep a backup in case of outage
-    } else {
-      targetSoc = 0.4;
-    }
-  } else {
+  if (dischargeHours > 0) {
     const energyPerHour = CHARGE_ENERGY_PER_HOUR;
     const totalEnergy = energyPerHour * dischargeHours;
     targetSoc = Math.min(
@@ -126,7 +119,42 @@ export function getTargetSoc(
     }
   }
 
+  const chargingHoursMean =
+    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
+  // if we charge during night due to low prices set soc to 80%
+  if (chargingHoursMean < 0.1) {
+    targetSoc = Math.max(0.8, targetSoc);
+    // else set soc to 40% to keep a backup in case of outage
+  } else {
+    targetSoc = Math.max(0.4, targetSoc);
+  }
+
+  const maxSocFromForecast = await getMaxSocFromForecast(context);
+  targetSoc = Math.min(maxSocFromForecast, targetSoc);
+
   return targetSoc;
+}
+
+async function getMaxSocFromForecast(context: InvocationContext) {
+  const forecast = await getProductionForecast();
+  context.log(`Forecast (kWh): ${forecast}`);
+  if (forecast >= 55) {
+    return 0;
+  } else if (forecast >= 50) {
+    return 0.2;
+  } else if (forecast >= 45) {
+    return 0.4;
+  } else if (forecast >= 40) {
+    return 0.6;
+  } else if (forecast >= 35) {
+    return 0.7;
+  } else if (forecast >= 30) {
+    return 0.8;
+  } else if (forecast >= 20) {
+    return 0.9;
+  } else {
+    return 1;
+  }
 }
 
 export function addToMessage(
