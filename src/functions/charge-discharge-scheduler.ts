@@ -14,6 +14,7 @@ import {
   addToMessage,
   addToMessageWithRank,
   getTargetSoc,
+  isWinter,
 } from '../util';
 import { getBatterySoc } from '../sungrow-api';
 import {
@@ -50,34 +51,41 @@ app.timer('charge-discharge-schedule', {
   handler: chargeDischargeSchedule,
 });
 
-/*app.http('charge-discharge-schedule-debug', {
+/* app.http('charge-discharge-schedule-debug', {
   methods: ['GET'],
   handler: chargeDischargeScheduleHttp,
-});*/
+}); */
 
 async function handleFunction(context: InvocationContext) {
-  const forecast = await getProductionForecast();
-  context.log(forecast);
-  await clearAllMessages();
+  await clearAllMessages([Operation.StartDischarge, Operation.StopDischarge]);
   const chargeMessages: Record<string, Message> = {};
   const dischargeMessages: Record<string, Message> = {};
   const prices = await getPrices();
+  const forecast = await getProductionForecast();
+  context.log(
+    `Forecast (kWh): ${forecast.energy}, (startHour): ${forecast.startHour}, (endHour): ${forecast.endHour}`
+  );
 
   const nightChargeHours = getNightChargeHours(prices);
   const highestNightChargeHour = [...nightChargeHours].sort((a, b) =>
     a.price < b.price ? 1 : -1
   )[0].price;
-  let dischargeHours = await setDayChargeAndDischarge(
-    prices,
-    highestNightChargeHour,
-    chargeMessages,
-    dischargeMessages
-  );
+  let dischargeHours;
+  if (isWinter()) {
+    dischargeHours = await setDayChargeAndDischarge(
+      prices,
+      highestNightChargeHour,
+      chargeMessages,
+      dischargeMessages
+    );
+  }
+
   if (!dischargeHours) {
     dischargeHours = await setDayDischarge(
       prices,
       highestNightChargeHour,
-      dischargeMessages
+      dischargeMessages,
+      forecast
     );
   }
 
@@ -86,7 +94,7 @@ async function handleFunction(context: InvocationContext) {
     nightChargeHours,
     dischargeHours,
     chargeMessages,
-    context
+    forecast.energy
   );
 
   for (const [time, message] of Object.entries(chargeMessages)) {
@@ -104,14 +112,17 @@ async function setNightCharging(
   chargeHours: Price[],
   dischargeHours: number,
   messages: Record<string, Message>,
-  context: InvocationContext
+  forecastEnergy: number
 ) {
   // get target_soc based on number of dischargehours, mean of chargehours and if at least 7 days since last balancing (100% charge)
   // calc charge amount from currentsoc, targetsoc and battery capacity
   // calc chargingpower based on chargeamount and chargehours, add 15% to accomodate load cap - if under 800w remove most expensive hour until above 800w
 
   const latestBalanceUpper = await getLatestBatteryBalanceUpper();
-  const diff = DateTime.now().diff(latestBalanceUpper, 'days').toObject();
+  const diff = DateTime.now()
+    .setZone('Europe/Stockholm')
+    .diff(latestBalanceUpper, 'days')
+    .toObject();
   const shouldBalanceBatteryUpper = Math.ceil(diff.days) >= 7;
 
   const targetSoc = await getTargetSoc(
@@ -119,7 +130,7 @@ async function setNightCharging(
     chargeHours,
     dischargeHours,
     shouldBalanceBatteryUpper,
-    context
+    forecastEnergy
   );
 
   const currentSoc = await getBatterySoc();
@@ -147,7 +158,9 @@ async function setNightCharging(
   }
 
   if (targetSoc === 1) {
-    await setLatestBatteryBalanceUpper(DateTime.now());
+    await setLatestBatteryBalanceUpper(
+      DateTime.now().setZone('Europe/Stockholm')
+    );
   }
 
   addToMessage(
@@ -297,11 +310,11 @@ async function setDayChargeAndDischarge(
 async function setDayDischarge(
   prices: Price[],
   highestNightChargePrice: number,
-  messages: Record<string, Message>
+  messages: Record<string, Message>,
+  forecast: { energy: number; startHour: DateTime; endHour: DateTime }
 ) {
   //  find all hours between 06:00-22:00 SEK_THRESHOLD more expensive than highest charge price
   //  add message to bus to discharge at most expensive hours
-
   let dischargeHoursPriceSorted = prices
     .slice(30, 46) // 06:00 to 22:00
     .sort((a, b) => (a.price < b.price ? 1 : -1))
@@ -329,17 +342,29 @@ async function setDayDischarge(
     a.time > b.time ? 1 : -1
   );
 
-  addToMessageWithRank(
-    dischargeHoursDateSorted,
-    rankings,
-    messages,
-    {
-      operation: Operation.StartDischarge,
-    } as Message,
-    {
-      operation: Operation.StopDischarge,
-    } as Message
-  );
+  if (isWinter() || (forecast.energy && forecast.energy < 25)) {
+    addToMessageWithRank(
+      dischargeHoursDateSorted,
+      rankings,
+      messages,
+      {
+        operation: Operation.StartDischarge,
+      } as Message,
+      {
+        operation: Operation.StopDischarge,
+      } as Message
+    );
+  } else if (forecast.endHour) {
+    const tomorrow = DateTime.now()
+      .setZone('Europe/Stockholm')
+      .plus({ days: 1 });
+    const solarEndTime = tomorrow
+      .set({ hour: forecast.endHour })
+      .startOf('hour');
+    messages[solarEndTime.toISO()] = {
+      operation: Operation.SetDischargeAfterSolar,
+    } as Message;
+  }
 
   return skipNightCharge ? 0 : dischargeHoursDateSorted.length;
 }

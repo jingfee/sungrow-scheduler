@@ -1,7 +1,5 @@
-export const BATTERY_UPGRADED = false;
-
 export const SEK_THRESHOLD = 0.3;
 export const MIN_SOC = 0.25;
-export const BATTERY_CAPACITY = BATTERY_UPGRADED ? 25600 : 9600;
+export const BATTERY_CAPACITY = 0.95 * 25600;
 // TODO: ADAPT THIS BASED ON WEATHER/PREVIOUS LOAD
 export const CHARGE_ENERGY_PER_HOUR = 3000;

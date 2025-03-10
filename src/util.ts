@@ -1,9 +1,4 @@
-import {
-  BATTERY_CAPACITY,
-  BATTERY_UPGRADED,
-  CHARGE_ENERGY_PER_HOUR,
-  MIN_SOC,
-} from './consts';
+import { BATTERY_CAPACITY, CHARGE_ENERGY_PER_HOUR, MIN_SOC } from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
@@ -17,7 +12,7 @@ export function getNightChargeHours(prices: Price[]): Price[] {
   //  charge 5 hours if diff avg5 and avg4 less than 5 öre
   //  else charge 4 hours
 
-  const maxChargeHours = BATTERY_UPGRADED ? 6 : 4;
+  const maxChargeHours = 6;
 
   let chargingHours = 0;
 
@@ -69,7 +64,7 @@ export async function getTargetSoc(
   chargingHours: Price[],
   dischargeHours: number,
   shouldBalanceBatteryUpper: boolean,
-  context: InvocationContext
+  forecastEnergy: number
 ): Promise<number> {
   // if no dischargehours set targetsoc to 80% if cheap charging, else 40%
   // if dischargehours < 3 set targetsoc to 60%
@@ -124,37 +119,34 @@ export async function getTargetSoc(
   // if we charge during night due to low prices set soc to 80%
   if (chargingHoursMean < 0.1) {
     targetSoc = Math.max(0.8, targetSoc);
-    // else set soc to 40% to keep a backup in case of outage
+    // else set soc to 30% to keep a backup in case of outage
   } else {
-    targetSoc = Math.max(0.4, targetSoc);
+    targetSoc = Math.max(0.3, targetSoc);
   }
 
-  const maxSocFromForecast = await getMaxSocFromForecast(context);
-  targetSoc = Math.min(maxSocFromForecast, targetSoc);
+  if (!isWinter() && forecastEnergy) {
+    const maxSocFromForecast = await getMaxSocFromForecast(forecastEnergy);
+    targetSoc = Math.min(maxSocFromForecast, targetSoc);
+  }
 
   return targetSoc;
 }
 
-async function getMaxSocFromForecast(context: InvocationContext) {
-  const forecast = await getProductionForecast();
-  context.log(`Forecast (kWh): ${forecast}`);
-  if (forecast >= 55) {
-    return 0;
-  } else if (forecast >= 50) {
-    return 0.2;
-  } else if (forecast >= 45) {
-    return 0.4;
-  } else if (forecast >= 40) {
-    return 0.6;
-  } else if (forecast >= 35) {
+async function getMaxSocFromForecast(forecastEnergy: number) {
+  if (forecastEnergy >= 50) {
+    return 0.25;
+  } else if (forecastEnergy >= 35) {
+    return 0.5;
+  } else if (forecastEnergy >= 20) {
     return 0.7;
-  } else if (forecast >= 30) {
-    return 0.8;
-  } else if (forecast >= 20) {
-    return 0.9;
   } else {
-    return 1;
+    return 0.9;
   }
+}
+
+export function isWinter() {
+  const now = DateTime.now().setZone('Europe/Stockholm');
+  return [1, 2, 11, 12].includes(now.month);
 }
 
 export function addToMessage(

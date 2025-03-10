@@ -33,10 +33,10 @@ export async function monitorPricesHttp(
   return { body: 'Monitor prices complete' };
 }
 
-app.timer('monitor-prices', {
+/* app.timer('monitor-prices', {
   schedule: '0 30 13 * * *',
   handler: monitorPrices,
-});
+}); */
 
 /*app.http('monitor-prices-debug', {
   methods: ['GET'],
@@ -127,8 +127,8 @@ export async function handleFunction(context: InvocationContext) {
 
   if (Object.keys(messages).length > 0) {
     const nextHourTime = DateTime.now()
-      .plus({ hours: 1 })
-      .setZone('Europe/Stockholm');
+      .setZone('Europe/Stockholm')
+      .plus({ hours: 1 });
     const firstMessageHour = DateTime.fromISO(Object.keys(messages)[0]).hour;
     if (status === Status.Discharging && nextHourTime.hour < firstMessageHour) {
       messages[nextHourTime.startOf('hour').toISO()] = {

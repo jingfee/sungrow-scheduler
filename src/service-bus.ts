@@ -18,10 +18,13 @@ export async function enqueue(message: Message, scheduleTime: DateTime) {
   await _sender.scheduleMessages(sbMessage, new Date(scheduleTime.toString()));
 }
 
-export async function clearAllMessages() {
+export async function clearAllMessages(excludeOperations: Operation[]) {
   const sender = _client.createSender(serviceBusName);
   const peekedMessages = await _receiver.peekMessages(100);
   for (const peekedMessage of peekedMessages) {
+    if (excludeOperations.includes((peekedMessage.body as Message).operation)) {
+      continue;
+    }
     await sender.cancelScheduledMessages(peekedMessage.sequenceNumber);
   }
 }

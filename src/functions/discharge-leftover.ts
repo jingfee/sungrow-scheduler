@@ -29,10 +29,10 @@ export async function dischargeLeftoverHttp(
   return { body: 'Discharge Leftover complete' };
 }
 
-app.timer('discharge-leftover', {
+/* app.timer('discharge-leftover', {
   schedule: '0 1 19-20 * * *',
   handler: dischargeLeftover,
-});
+}); */
 
 /*app.http('discharge-leftover-debug', {
   methods: ['GET'],
@@ -62,14 +62,17 @@ async function handleFunction(context: InvocationContext) {
       {
         operation: Operation.StartDischarge,
       } as Message,
-      DateTime.now()
+      DateTime.now().setZone('Europe/Stockholm')
     );
 
     await enqueue(
       {
         operation: Operation.StopDischarge,
       } as Message,
-      DateTime.now().plus({ hours: 1 }).startOf('hour')
+      DateTime.now()
+        .setZone('Europe/Stockholm')
+        .plus({ hours: 1 })
+        .startOf('hour')
     );
   }
 }

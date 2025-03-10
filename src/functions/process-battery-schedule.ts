@@ -14,14 +14,18 @@ import {
   setStopBatteryDischarge,
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
-import { getChargeAndDischargeMessages } from '../service-bus';
+import { enqueue, getChargeAndDischargeMessages } from '../service-bus';
 import {
   getLatestChargeSoc,
+  setLatestBatteryBalanceUpper,
   setLatestChargeSoc,
   setStatus,
   Status,
 } from '../data-tables';
 import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
+import { getPrices } from '../prices';
+import { getProductionForecast } from '../solcast';
+import { addToMessageWithRank } from '../util';
 
 const serviceBusName = 'battery-queue';
 
@@ -65,6 +69,9 @@ async function handleFunction(message: Message, context: InvocationContext) {
       break;
     case Operation.StopDischarge:
       await handleStopBatteryDischarge();
+      break;
+    case Operation.SetDischargeAfterSolar:
+      await handleSetDischargeAfterSolar(context);
       break;
   }
 }
@@ -130,4 +137,56 @@ async function handleStartBatteryDischarge(
 async function handleStopBatteryDischarge() {
   await setStopBatteryDischarge();
   await setStatus(Status.Stopped);
+}
+
+async function handleSetDischargeAfterSolar(context: InvocationContext) {
+  const soc = await getBatterySoc();
+  await setLatestChargeSoc(soc);
+
+  if (soc === 1) {
+    await setLatestBatteryBalanceUpper(
+      DateTime.now().setZone('Europe/Stockholm')
+    );
+  }
+
+  const prices = await getPrices();
+  const forecast = await getProductionForecast();
+
+  if (!forecast.startHour) {
+    context.log('Error fetching forecast, discharge until 06:00');
+  }
+
+  const now = DateTime.now().setZone('Europe/Stockholm');
+
+  const dischargeHoursPriceSorted = prices
+    .slice(now.hour, 24 + forecast.startHour)
+    .filter((p) => p.price > 0.05)
+    .sort((a, b) => (a.price < b.price ? 1 : -1));
+
+  const rankings: Record<string, number> = {};
+  for (const [index, hour] of dischargeHoursPriceSorted.entries()) {
+    rankings[hour.time] = index;
+  }
+
+  const dischargeHoursDateSorted = [...dischargeHoursPriceSorted].sort((a, b) =>
+    a.time > b.time ? 1 : -1
+  );
+
+  const messages: Record<string, Message> = {};
+  addToMessageWithRank(
+    dischargeHoursDateSorted,
+    rankings,
+    messages,
+    {
+      operation: Operation.StartDischarge,
+    } as Message,
+    {
+      operation: Operation.StopDischarge,
+    } as Message
+  );
+
+  for (const [time, message] of Object.entries(messages)) {
+    context.log('Adding discharge message', time, JSON.stringify(message));
+    await enqueue(message, DateTime.fromISO(time));
+  }
 }

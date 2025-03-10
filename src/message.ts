@@ -10,4 +10,5 @@ export enum Operation {
   StopCharge,
   StartDischarge,
   StopDischarge,
+  SetDischargeAfterSolar,
 }

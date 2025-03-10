@@ -8,7 +8,7 @@ export async function getLowestNightTemperature(): Promise<number> {
   const nightTemperatures = weatherResponse.timeSeries
     .filter((ts) => {
       const date = DateTime.fromISO(ts.validTime);
-      const now = DateTime.now();
+      const now = DateTime.now().setZone('Europe/Stockholm');
       return (
         (date.hasSame(now, 'day') && date.hour >= 22) ||
         (date.startOf('day') > now.startOf('day') &&

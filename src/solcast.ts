@@ -1,26 +1,47 @@
 import { DateTime } from 'luxon';
 
-export async function getProductionForecast(): Promise<number> {
+export async function getProductionForecast(): Promise<{
+  energy: number;
+  startHour: number;
+  endHour: number;
+}> {
   const solcastResponse = await fetchSolcast();
   if (!solcastResponse) {
-    return 0;
+    return { energy: undefined, startHour: undefined, endHour: undefined };
   }
 
-  const now = DateTime.now();
+  const now = DateTime.now().setZone('Europe/Stockholm');
   let energy = 0;
-  for (const forecast of solcastResponse.forecasts) {
-    const time = DateTime.fromISO(forecast.period_end);
-    if (+now.startOf('day') === +time.startOf('day')) {
-      continue;
-    }
-    if (+now.plus({ days: 2 }).startOf('day') === +time.startOf('day')) {
-      break;
-    }
-
+  const filteredForecasts = solcastResponse.forecasts.filter((r) => {
+    const time = DateTime.fromISO(r.period_end);
+    return (
+      +time.startOf('day') > +now.startOf('day') &&
+      +now.plus({ days: 2 }).startOf('day') > +time.startOf('day')
+    );
+  });
+  for (const forecast of filteredForecasts) {
     energy += 0.5 * forecast.pv_estimate;
   }
 
-  return energy;
+  const filteredProducingHours = filteredForecasts.filter(
+    (r) => r.pv_estimate >= 0.5
+  );
+  const startHour =
+    filteredForecasts.length > 0
+      ? DateTime.fromISO(filteredProducingHours[0].period_end)
+          .setZone('Europe/Stockholm')
+          .plus({ minutes: -30 }).hour
+      : undefined;
+  const endHour =
+    filteredForecasts.length > 0
+      ? DateTime.fromISO(
+          filteredProducingHours[filteredProducingHours.length - 1].period_end
+        )
+          .setZone('Europe/Stockholm')
+          .plus({ minutes: -30 }).hour
+      : undefined;
+
+  return { energy, startHour, endHour };
 }
 
 async function fetchSolcast() {
