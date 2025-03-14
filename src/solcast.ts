@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { setForecast } from './data-tables';
 
 export async function getProductionForecast(): Promise<{
   energy: number;
@@ -40,6 +41,8 @@ export async function getProductionForecast(): Promise<{
           .setZone('Europe/Stockholm')
           .plus({ minutes: -30 }).hour
       : undefined;
+
+  await setForecast(energy, startHour, endHour);
 
   return { energy, startHour, endHour };
 }

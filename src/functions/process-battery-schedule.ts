@@ -14,13 +14,15 @@ import {
   setStopBatteryDischarge,
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
-import { enqueue, getChargeAndDischargeMessages } from '../service-bus';
+import {
+  clearAllMessages,
+  enqueue,
+  getChargeAndDischargeMessages,
+} from '../service-bus';
 import {
   getLatestChargeSoc,
   setLatestBatteryBalanceUpper,
   setLatestChargeSoc,
-  setStatus,
-  Status,
 } from '../data-tables';
 import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 import { getPrices } from '../prices';
@@ -78,7 +80,6 @@ async function handleFunction(message: Message, context: InvocationContext) {
 
 async function handleStartBatteryCharge(message: Message) {
   await setStartBatteryCharge(message.power, message.targetSoc);
-  await setStatus(Status.Charging);
 }
 
 async function handleStopBatteryCharge(message: Message) {
@@ -86,7 +87,6 @@ async function handleStopBatteryCharge(message: Message) {
   await setStopBatteryCharge();
 
   await setLatestChargeSoc(soc * message.targetSoc);
-  await setStatus(Status.Stopped);
 }
 
 async function handleStartBatteryDischarge(
@@ -121,7 +121,6 @@ async function handleStartBatteryDischarge(
       )
       .some((m) => m.body.rank < message.rank);
     if (hasFutureDischargeWithLowerRank) {
-      await setStatus(Status.Stopped);
       return;
     }
   }
@@ -131,12 +130,10 @@ async function handleStartBatteryDischarge(
   const startHour = now.hour;
   const endHour = now.plus({ hours: 1 }).hour;
   await setStartBatteryDischarge(startHour, endHour);
-  await setStatus(Status.Discharging);
 }
 
 async function handleStopBatteryDischarge() {
   await setStopBatteryDischarge();
-  await setStatus(Status.Stopped);
 }
 
 async function handleSetDischargeAfterSolar(context: InvocationContext) {
@@ -149,6 +146,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     );
   }
 
+  await clearAllMessages([]);
   const prices = await getPrices();
   const forecast = await getProductionForecast();
 

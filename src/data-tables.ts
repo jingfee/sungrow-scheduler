@@ -1,5 +1,6 @@
 import { AzureNamedKeyCredential, TableClient } from '@azure/data-tables';
 import { DateTime } from 'luxon';
+import { start } from 'repl';
 
 const account = process.env['AzureDataTableAccountName'];
 const accountKey = process.env['AzureDataTableAccountKey'];
@@ -40,19 +41,6 @@ export async function getLatestChargeSoc(): Promise<number> {
   return parseFloat(entity.value as string);
 }
 
-export async function setStatus(status: Status) {
-  await _client.upsertEntity({
-    partitionKey: TableKeys.Status,
-    rowKey: '',
-    value: status.toString(),
-  });
-}
-
-export async function getStatus(): Promise<Status> {
-  const entity = await _client.getEntity(TableKeys.Status, '');
-  return parseInt(entity.value as string);
-}
-
 export async function setLatestNightChargeHighPrice(price: number) {
   await _client.upsertEntity({
     partitionKey: TableKeys.LatestNightChargeHighPrice,
@@ -69,15 +57,33 @@ export async function getLatestNightChargeHighPrice() {
   return parseInt(entity.value as string);
 }
 
+export async function setForecast(
+  energy: number,
+  startHour: number,
+  endHour: number
+) {
+  await _client.upsertEntity({
+    partitionKey: TableKeys.ForecastEnergy,
+    rowKey: '',
+    value: energy.toString(),
+  });
+  await _client.upsertEntity({
+    partitionKey: TableKeys.ForecastStartHour,
+    rowKey: '',
+    value: startHour.toString(),
+  });
+  await _client.upsertEntity({
+    partitionKey: TableKeys.ForecastEndHour,
+    rowKey: '',
+    value: endHour.toString(),
+  });
+}
+
 enum TableKeys {
   LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
   LatestChargeSoc = 'LatestChargeSoc',
-  Status = 'Status',
   LatestNightChargeHighPrice = 'LatestNightChargeHighPrice',
-}
-
-export enum Status {
-  Charging,
-  Discharging,
-  Stopped,
+  ForecastEnergy = 'ForecastEnergy',
+  ForecastStartHour = 'ForecastStartHour',
+  ForecastEndHour = 'ForecastEndHour',
 }
