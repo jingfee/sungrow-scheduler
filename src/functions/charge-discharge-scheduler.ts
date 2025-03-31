@@ -342,7 +342,8 @@ async function setDayDischarge(
     a.time > b.time ? 1 : -1
   );
 
-  if (isWinter() || (forecast.energy && forecast.energy < 25)) {
+  if (isWinter() || (forecast.energy && forecast.energy < 15)) {
+    await clearAllMessages([]);
     addToMessageWithRank(
       dischargeHoursDateSorted,
       rankings,
@@ -354,13 +355,14 @@ async function setDayDischarge(
         operation: Operation.StopDischarge,
       } as Message
     );
-  } else if (forecast.endHour) {
+  }
+
+  if (!isWinter()) {
     const tomorrow = DateTime.now()
       .setZone('Europe/Stockholm')
       .plus({ days: 1 });
-    const solarEndTime = tomorrow
-      .set({ hour: forecast.endHour })
-      .startOf('hour');
+    const endHour = Math.min(forecast.endHour ?? 18, 20);
+    const solarEndTime = tomorrow.set({ hour: endHour }).startOf('hour');
     messages[solarEndTime.toISO()] = {
       operation: Operation.SetDischargeAfterSolar,
     } as Message;

@@ -177,7 +177,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   const endHour = Math.min(forecast.startHour ?? 9, 9);
 
   const dischargeHoursPriceSorted = prices
-    .slice(now.hour - 1, 23 + endHour)
+    .slice(now.hour, 23 + endHour)
     .filter((p) => p.price > 0.05)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
