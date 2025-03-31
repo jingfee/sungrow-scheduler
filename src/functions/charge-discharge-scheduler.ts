@@ -47,7 +47,7 @@ export async function chargeDischargeScheduleHttp(
 }
 
 app.timer('charge-discharge-schedule', {
-  schedule: '0 55 20 * * *',
+  schedule: '0 55 19 * * *',
   handler: chargeDischargeSchedule,
 });
 

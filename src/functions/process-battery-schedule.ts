@@ -20,7 +20,9 @@ import {
   getChargeAndDischargeMessages,
 } from '../service-bus';
 import {
+  getDailyLoadAndTime,
   getLatestChargeSoc,
+  setDailyLoad,
   setLatestBatteryBalanceUpper,
   setLatestChargeSoc,
 } from '../data-tables';
@@ -42,8 +44,11 @@ export async function serviceBusTriggerHttp(
   request: HttpRequest,
   context: InvocationContext
 ): Promise<HttpResponseInit> {
-  await handleFunction({ operation: Operation.StartCharge, rank: 2 }, context);
-  return { body: 'Discharge Leftover complete' };
+  await handleFunction(
+    { operation: Operation.SetDischargeAfterSolar },
+    context
+  );
+  return { body: 'Complete' };
 }
 
 app.serviceBusQueue('service-bus-trigger', {
@@ -52,10 +57,10 @@ app.serviceBusQueue('service-bus-trigger', {
   handler: serviceBusTrigger,
 });
 
-/*app.http('service-bus-trigger-debug', {
+/* app.http('service-bus-trigger-debug', {
   methods: ['GET'],
   handler: serviceBusTriggerHttp,
-});*/
+}); */
 
 async function handleFunction(message: Message, context: InvocationContext) {
   context.log('Handling message', JSON.stringify(message));
@@ -95,7 +100,20 @@ async function handleStartBatteryDischarge(
 ) {
   const dailyLoad = await getDailyLoad();
   const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
-  const loadHourlyMean = dailyLoad / currentHour;
+
+  let loadHourlyMean;
+  if (currentHour >= 8) {
+    loadHourlyMean = dailyLoad / currentHour;
+    await setDailyLoad(dailyLoad);
+  } else {
+    const dailyLoadSaved = await getDailyLoadAndTime();
+    const dailyLoadSavedHour = DateTime.fromISO(dailyLoadSaved.time).setZone(
+      'Europe/Stockholm'
+    ).hour;
+
+    loadHourlyMean =
+      (dailyLoad + dailyLoadSaved.load) / (currentHour + dailyLoadSavedHour);
+  }
 
   const latestChargeSoc = await getLatestChargeSoc();
   const dischargeCapacity = (latestChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
@@ -146,18 +164,20 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     );
   }
 
-  await clearAllMessages([]);
+  await clearAllMessages([Operation.SetDischargeAfterSolar]);
   const prices = await getPrices();
   const forecast = await getProductionForecast();
 
   if (!forecast.startHour) {
-    context.log('Error fetching forecast, discharge until 06:00');
+    context.log('Error fetching forecast, discharge until 09:00');
   }
 
   const now = DateTime.now().setZone('Europe/Stockholm');
 
+  const endHour = Math.min(forecast.startHour ?? 9, 9);
+
   const dischargeHoursPriceSorted = prices
-    .slice(now.hour, 24 + forecast.startHour)
+    .slice(now.hour - 1, 23 + endHour)
     .filter((p) => p.price > 0.05)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 

@@ -79,6 +79,19 @@ export async function setForecast(
   });
 }
 
+export async function setDailyLoad(load: number) {
+  await _client.upsertEntity({
+    partitionKey: TableKeys.DailyLoad,
+    rowKey: '',
+    value: load.toString(),
+  });
+}
+
+export async function getDailyLoadAndTime() {
+  const entity = await _client.getEntity(TableKeys.DailyLoad, '');
+  return { load: parseFloat(entity.value as string), time: entity.timestamp };
+}
+
 enum TableKeys {
   LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
   LatestChargeSoc = 'LatestChargeSoc',
@@ -86,4 +99,5 @@ enum TableKeys {
   ForecastEnergy = 'ForecastEnergy',
   ForecastStartHour = 'ForecastStartHour',
   ForecastEndHour = 'ForecastEndHour',
+  DailyLoad = 'DailyLoad',
 }

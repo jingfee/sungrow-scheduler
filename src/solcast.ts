@@ -25,13 +25,13 @@ export async function getProductionForecast(): Promise<{
   }
 
   const filteredProducingHours = filteredForecasts.filter(
-    (r) => r.pv_estimate >= 0.5
+    (r) => r.pv_estimate >= 1
   );
   const startHour =
     filteredForecasts.length > 0
-      ? DateTime.fromISO(filteredProducingHours[0].period_end)
-          .setZone('Europe/Stockholm')
-          .plus({ minutes: -30 }).hour
+      ? DateTime.fromISO(filteredProducingHours[0].period_end).setZone(
+          'Europe/Stockholm'
+        ).hour
       : undefined;
   const endHour =
     filteredForecasts.length > 0
