@@ -92,6 +92,19 @@ export async function getDailyLoadAndTime() {
   return { load: parseFloat(entity.value as string), time: entity.timestamp };
 }
 
+export async function setRankings(rankings: number[]) {
+  await _client.upsertEntity({
+    partitionKey: TableKeys.Rankings,
+    rowKey: '',
+    value: JSON.stringify(rankings),
+  });
+}
+
+export async function getRankings(): Promise<number[]> {
+  const entity = await _client.getEntity(TableKeys.Rankings, '');
+  return JSON.parse(entity.value as string);
+}
+
 enum TableKeys {
   LatestBatteryBalanceUpper = 'LatestBatteryBalanceUpper',
   LatestChargeSoc = 'LatestChargeSoc',
@@ -100,4 +113,5 @@ enum TableKeys {
   ForecastStartHour = 'ForecastStartHour',
   ForecastEndHour = 'ForecastEndHour',
   DailyLoad = 'DailyLoad',
+  Rankings = 'Rankings',
 }

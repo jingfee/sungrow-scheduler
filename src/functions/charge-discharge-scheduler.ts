@@ -22,6 +22,7 @@ import {
   getLatestNightChargeHighPrice,
   setLatestBatteryBalanceUpper,
   setLatestNightChargeHighPrice,
+  setRankings,
 } from '../data-tables';
 import {
   BATTERY_CAPACITY,
@@ -104,6 +105,16 @@ async function handleFunction(context: InvocationContext) {
   for (const [time, message] of Object.entries(dischargeMessages)) {
     context.log('Adding discharge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
+  }
+  const rankings = [
+    ...Array(
+      Object.values(dischargeMessages).filter(
+        (m) => m.operation === Operation.StartDischarge
+      ).length
+    ).keys(),
+  ];
+  if (rankings.length > 0) {
+    await setRankings(rankings);
   }
 }
 

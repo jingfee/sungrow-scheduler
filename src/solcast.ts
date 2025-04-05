@@ -31,15 +31,13 @@ export async function getProductionForecast(): Promise<{
     filteredForecasts.length > 0
       ? DateTime.fromISO(filteredProducingHours[0].period_end).setZone(
           'Europe/Stockholm'
-        ).hour
+        ).hour + 1
       : undefined;
   const endHour =
     filteredForecasts.length > 0
       ? DateTime.fromISO(
           filteredProducingHours[filteredProducingHours.length - 1].period_end
-        )
-          .setZone('Europe/Stockholm')
-          .plus({ minutes: -30 }).hour
+        ).setZone('Europe/Stockholm').hour - 1
       : undefined;
 
   await setForecast(energy, startHour, endHour);

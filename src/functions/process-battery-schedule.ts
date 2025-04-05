@@ -14,17 +14,14 @@ import {
   setStopBatteryDischarge,
 } from '../sungrow-api';
 import { DateTime } from 'luxon';
-import {
-  clearAllMessages,
-  enqueue,
-  getChargeAndDischargeMessages,
-} from '../service-bus';
+import { clearAllMessages, enqueue } from '../service-bus';
 import {
   getDailyLoadAndTime,
-  getLatestChargeSoc,
+  getRankings,
   setDailyLoad,
   setLatestBatteryBalanceUpper,
   setLatestChargeSoc,
+  setRankings,
 } from '../data-tables';
 import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 import { getPrices } from '../prices';
@@ -98,55 +95,55 @@ async function handleStartBatteryDischarge(
   message: Message,
   context: InvocationContext
 ) {
-  const dailyLoad = await getDailyLoad();
-  const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
+  if (message.rank != null) {
+    const dailyLoad = await getDailyLoad();
+    const rankings = await getRankings();
+    const rank = rankings.indexOf(message.rank);
+    if (rank === -1) {
+      context.log(
+        `Rank: ${rank} not found in rankings array: ${JSON.stringify(rankings)}`
+      );
+    } else {
+      const hasFutureDischargeWithLowerRank = rank > 0;
+      const newRankings = rankings.filter((r) => r !== message.rank);
+      await setRankings(newRankings);
 
-  let loadHourlyMean;
-  if (currentHour >= 8) {
-    loadHourlyMean = dailyLoad / currentHour;
-    await setDailyLoad(dailyLoad);
-  } else {
-    const dailyLoadSaved = await getDailyLoadAndTime();
-    const dailyLoadSavedHour = DateTime.fromISO(dailyLoadSaved.time).setZone(
-      'Europe/Stockholm'
-    ).hour;
+      const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
 
-    loadHourlyMean =
-      (dailyLoad + dailyLoadSaved.load) / (currentHour + dailyLoadSavedHour);
-  }
+      let loadHourlyMean;
+      if (currentHour > 6) {
+        loadHourlyMean = dailyLoad / currentHour;
+        await setDailyLoad(dailyLoad);
+      } else {
+        const dailyLoadSaved = await getDailyLoadAndTime();
+        const dailyLoadSavedHour = DateTime.fromISO(
+          dailyLoadSaved.time
+        ).setZone('Europe/Stockholm').hour;
 
-  const latestChargeSoc = await getLatestChargeSoc();
-  const dischargeCapacity = (latestChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
+        loadHourlyMean =
+          (dailyLoad + dailyLoadSaved.load) /
+          (currentHour + dailyLoadSavedHour);
+      }
 
-  const hours = Math.round(dischargeCapacity / loadHourlyMean);
+      const currentChargeSoc = await getBatterySoc();
+      const dischargeCapacity = (currentChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
 
-  context.log(`Rank: ${message.rank} Hours: ${hours}`);
-  if (message.rank != undefined && message.rank >= hours) {
-    const messages = await getChargeAndDischargeMessages();
-    const nextChargeMessage =
-      messages.chargeMessages.length > 0
-        ? messages.chargeMessages.sort((a, b) =>
-            a.scheduledEnqueueTimeUtc > b.scheduledEnqueueTimeUtc ? 1 : -1
-          )[0]
-        : undefined;
-    const hasFutureDischargeWithLowerRank = messages.dischargeMessages
-      .filter(
-        (m) =>
-          (m.body as Message).operation === Operation.StartDischarge &&
-          (!nextChargeMessage ||
-            m.scheduledEnqueueTimeUtc <
-              nextChargeMessage.scheduledEnqueueTimeUtc)
-      )
-      .some((m) => m.body.rank < message.rank);
-    if (hasFutureDischargeWithLowerRank) {
-      return;
+      const hours = Math.round(dischargeCapacity / loadHourlyMean);
+
+      context.log(`Rank: ${rank} Hours: ${hours}`);
+      if (rank != undefined && rank >= hours) {
+        if (hasFutureDischargeWithLowerRank) {
+          return;
+        }
+      }
     }
   }
 
   context.log('Starting discharge');
   const now = DateTime.now().setZone('Europe/Stockholm');
   const startHour = now.hour;
-  const endHour = now.plus({ hours: 1 }).hour;
+  let endHour = now.plus({ hours: 1 }).hour;
+  endHour = endHour === 0 ? 24 : endHour;
   await setStartBatteryDischarge(startHour, endHour);
 }
 
@@ -207,4 +204,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     context.log('Adding discharge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
+  const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
+  console.log(rankingsArray);
+  await setRankings(rankingsArray);
 }

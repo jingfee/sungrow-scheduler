@@ -1,5 +1,5 @@
 export const SEK_THRESHOLD = 0.3;
-export const MIN_SOC = 0.25;
+export const MIN_SOC = 0.2;
 export const BATTERY_CAPACITY = 0.95 * 25600;
 // TODO: ADAPT THIS BASED ON WEATHER/PREVIOUS LOAD
 export const CHARGE_ENERGY_PER_HOUR = 3000;
