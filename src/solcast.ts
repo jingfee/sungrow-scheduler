@@ -1,7 +1,10 @@
 import { DateTime } from 'luxon';
 import { setForecast } from './data-tables';
+import { InvocationContext } from '@azure/functions';
 
-export async function getProductionForecast(): Promise<{
+export async function getProductionForecast(
+  context: InvocationContext
+): Promise<{
   energy: number;
   startHour: number;
   endHour: number;
@@ -20,6 +23,10 @@ export async function getProductionForecast(): Promise<{
       +now.plus({ days: 2 }).startOf('day') > +time.startOf('day')
     );
   });
+  context.log(`Solcast first tomorrow: ${filteredForecasts[0]}`);
+  context.log(
+    `Solcast last tomorrow: ${filteredForecasts[filteredForecasts.length - 1]}`
+  );
   for (const forecast of filteredForecasts) {
     energy += 0.5 * forecast.pv_estimate;
   }
@@ -27,11 +34,17 @@ export async function getProductionForecast(): Promise<{
   const filteredProducingHours = filteredForecasts.filter(
     (r) => r.pv_estimate >= 1
   );
+  context.log(`Solcast first producing: ${filteredProducingHours[0]}`);
+  context.log(
+    `Solcast last producing: ${
+      filteredForecasts[filteredProducingHours.length - 1]
+    }`
+  );
   const startHour =
     filteredForecasts.length > 0
       ? DateTime.fromISO(filteredProducingHours[0].period_end).setZone(
           'Europe/Stockholm'
-        ).hour + 1
+        ).hour
       : undefined;
   const endHour =
     filteredForecasts.length > 0
@@ -39,6 +52,9 @@ export async function getProductionForecast(): Promise<{
           filteredProducingHours[filteredProducingHours.length - 1].period_end
         ).setZone('Europe/Stockholm').hour - 1
       : undefined;
+
+  context.log(`Solcast start hour: ${startHour}`);
+  context.log(`Solcast end hour: ${endHour}`);
 
   await setForecast(energy, startHour, endHour);
 

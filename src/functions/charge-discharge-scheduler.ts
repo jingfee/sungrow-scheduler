@@ -62,7 +62,7 @@ async function handleFunction(context: InvocationContext) {
   const chargeMessages: Record<string, Message> = {};
   const dischargeMessages: Record<string, Message> = {};
   const prices = await getPrices();
-  const forecast = await getProductionForecast();
+  const forecast = await getProductionForecast(context);
   context.log(
     `Forecast (kWh): ${forecast.energy}, (startHour): ${forecast.startHour}, (endHour): ${forecast.endHour}`
   );

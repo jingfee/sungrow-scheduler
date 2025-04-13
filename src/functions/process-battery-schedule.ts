@@ -163,7 +163,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
 
   await clearAllMessages([Operation.SetDischargeAfterSolar]);
   const prices = await getPrices();
-  const forecast = await getProductionForecast();
+  const forecast = await getProductionForecast(context);
 
   if (!forecast.startHour) {
     context.log('Error fetching forecast, discharge until 09:00');
@@ -174,7 +174,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   const endHour = Math.min(forecast.startHour ?? 9, 9);
 
   const dischargeHoursPriceSorted = prices
-    .slice(now.hour, 23 + endHour)
+    .slice(now.hour, 24 + endHour)
     .filter((p) => p.price > 0.05)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
@@ -199,12 +199,26 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
       operation: Operation.StopDischarge,
     } as Message
   );
+  const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
+  const stopDischarge =
+    Object.entries(messages)[Object.keys(messages).length - 1];
+  for (let i = 0; i < 3; i++) {
+    const time = DateTime.fromISO(stopDischarge[0])
+      .setZone('Europe/Stockholm')
+      .plus({ hours: i });
+    messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
+  }
+  const time = DateTime.fromISO(stopDischarge[0])
+    .setZone('Europe/Stockholm')
+    .plus({ hours: 3 });
+  messages[time.toISO()] = {
+    operation: Operation.StopDischarge,
+  } as Message;
 
   for (const [time, message] of Object.entries(messages)) {
     context.log('Adding discharge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
-  const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
-  console.log(rankingsArray);
+
   await setRankings(rankingsArray);
 }
