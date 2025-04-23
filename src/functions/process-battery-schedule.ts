@@ -175,7 +175,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
 
   const dischargeHoursPriceSorted = prices
     .slice(now.hour, 24 + endHour)
-    .filter((p) => p.price > 0.05)
+    .filter((p) => p.price >= -0.2)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
   const rankings: Record<string, number> = {};
@@ -202,6 +202,10 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
   const stopDischarge =
     Object.entries(messages)[Object.keys(messages).length - 1];
+  if (stopDischarge[1].operation === Operation.StopDischarge) {
+    delete messages[stopDischarge[0]];
+  }
+
   for (let i = 0; i < 3; i++) {
     const time = DateTime.fromISO(stopDischarge[0])
       .setZone('Europe/Stockholm')

@@ -134,13 +134,13 @@ export async function getTargetSoc(
 
 async function getMaxSocFromForecast(forecastEnergy: number) {
   if (forecastEnergy >= 50) {
-    return 0.25;
+    return 0.2;
   } else if (forecastEnergy >= 35) {
-    return 0.5;
+    return 0.4;
   } else if (forecastEnergy >= 20) {
-    return 0.7;
+    return 0.6;
   } else {
-    return 0.9;
+    return 0.8;
   }
 }
 

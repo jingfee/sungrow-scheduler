@@ -59,6 +59,7 @@ export async function getLatestNightChargeHighPrice() {
 
 export async function setForecast(
   energy: number,
+  batteryEnergy: number,
   startHour: number,
   endHour: number
 ) {
@@ -66,6 +67,11 @@ export async function setForecast(
     partitionKey: TableKeys.ForecastEnergy,
     rowKey: '',
     value: energy.toString(),
+  });
+  await _client.upsertEntity({
+    partitionKey: TableKeys.ForecastBatteryEnergy,
+    rowKey: '',
+    value: batteryEnergy.toString(),
   });
   await _client.upsertEntity({
     partitionKey: TableKeys.ForecastStartHour,
@@ -110,6 +116,7 @@ enum TableKeys {
   LatestChargeSoc = 'LatestChargeSoc',
   LatestNightChargeHighPrice = 'LatestNightChargeHighPrice',
   ForecastEnergy = 'ForecastEnergy',
+  ForecastBatteryEnergy = 'ForecastBatteryEnergy',
   ForecastStartHour = 'ForecastStartHour',
   ForecastEndHour = 'ForecastEndHour',
   DailyLoad = 'DailyLoad',

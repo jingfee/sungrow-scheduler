@@ -98,6 +98,10 @@ async function handleFunction(context: InvocationContext) {
     forecast.energy
   );
 
+  if (Object.keys(chargeMessages).length > 0) {
+    await clearAllMessages([Operation.SetDischargeAfterSolar]);
+  }
+
   for (const [time, message] of Object.entries(chargeMessages)) {
     context.log('Adding charge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
@@ -322,7 +326,12 @@ async function setDayDischarge(
   prices: Price[],
   highestNightChargePrice: number,
   messages: Record<string, Message>,
-  forecast: { energy: number; startHour: DateTime; endHour: DateTime }
+  forecast: {
+    energy: number;
+    batteryEnergy: number;
+    startHour: DateTime;
+    endHour: DateTime;
+  }
 ) {
   //  find all hours between 06:00-22:00 SEK_THRESHOLD more expensive than highest charge price
   //  add message to bus to discharge at most expensive hours
@@ -368,7 +377,7 @@ async function setDayDischarge(
     );
   }
 
-  if (!isWinter()) {
+  if (!isWinter() && forecast.batteryEnergy >= 10) {
     const tomorrow = DateTime.now()
       .setZone('Europe/Stockholm')
       .plus({ days: 1 });
