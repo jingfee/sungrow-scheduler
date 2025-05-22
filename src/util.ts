@@ -1,5 +1,10 @@
-import { BATTERY_CAPACITY, CHARGE_ENERGY_PER_HOUR, MIN_SOC } from './consts';
-import { Message } from './message';
+import {
+  BATTERY_CAPACITY,
+  CHARGE_ENERGY_PER_HOUR,
+  MIN_SOC,
+  UNRANKED_DISCHARGE_HOURS,
+} from './consts';
+import { Message, Operation } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
 
@@ -179,4 +184,44 @@ export function addToMessageWithRank(
         stopMessage;
     }
   }
+}
+
+export function setUnrankedDischargeBefore(
+  messages: Record<string, Message>,
+  dischargeStartTime: DateTime
+) {
+  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
+    const time = dischargeStartTime
+      .setZone('Europe/Stockholm')
+      .plus({ hours: i });
+    messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
+  }
+  // Stop-message 1 minute before to avoid conflict with setdischargeaftersolar-message
+  const time = dischargeStartTime
+    .setZone('Europe/Stockholm')
+    .plus({ hours: UNRANKED_DISCHARGE_HOURS, minutes: -1 });
+  messages[time.toISO()] = {
+    operation: Operation.StopDischarge,
+  } as Message;
+}
+
+export function setUnrankedDischargeAfter(messages: Record<string, Message>) {
+  const stopDischarge =
+    Object.entries(messages)[Object.keys(messages).length - 1];
+  if (stopDischarge[1].operation === Operation.StopDischarge) {
+    delete messages[stopDischarge[0]];
+  }
+
+  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
+    const time = DateTime.fromISO(stopDischarge[0])
+      .setZone('Europe/Stockholm')
+      .plus({ hours: i });
+    messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
+  }
+  const time = DateTime.fromISO(stopDischarge[0])
+    .setZone('Europe/Stockholm')
+    .plus({ hours: UNRANKED_DISCHARGE_HOURS });
+  messages[time.toISO()] = {
+    operation: Operation.StopDischarge,
+  } as Message;
 }
