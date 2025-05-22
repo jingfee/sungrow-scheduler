@@ -23,7 +23,7 @@ import {
   setLatestChargeSoc,
   setRankings,
 } from '../data-tables';
-import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
+import { BATTERY_CAPACITY, MIN_SOC, UNRANKED_DISCHARGE_HOURS } from '../consts';
 import { getPrices } from '../prices';
 import { getProductionForecast } from '../solcast';
 import { addToMessageWithRank } from '../util';
@@ -166,15 +166,17 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   const forecast = await getProductionForecast(context);
 
   if (!forecast.startHour) {
-    context.log('Error fetching forecast, discharge until 09:00');
+    context.log(
+      'No starthour, either there was an error fetching forecast or upcoming production doesnt reach the threshold, ranked discharge until 09:00'
+    );
   }
 
   const now = DateTime.now().setZone('Europe/Stockholm');
 
-  const endHour = Math.min(forecast.startHour ?? 9, 9);
+  const dischargeEndHour = Math.min(forecast.startHour ?? 9, 9);
 
   const dischargeHoursPriceSorted = prices
-    .slice(now.hour, 24 + endHour)
+    .slice(now.hour, 24 + dischargeEndHour)
     .filter((p) => p.price >= -0.2)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
@@ -187,7 +189,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     a.time > b.time ? 1 : -1
   );
 
-  const messages: Record<string, Message> = {};
+  let messages: Record<string, Message> = {};
   addToMessageWithRank(
     dischargeHoursDateSorted,
     rankings,
@@ -200,13 +202,29 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     } as Message
   );
   const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
+
+  // Only set unrankeddischarge if we have a startHour for the forecast
+  if (forecast.startHour) {
+    messages = setUnrankedDischarge(messages);
+  }
+
+  for (const [time, message] of Object.entries(messages)) {
+    context.log('Adding discharge message', time, JSON.stringify(message));
+    await enqueue(message, DateTime.fromISO(time));
+  }
+  await setRankings(rankingsArray);
+}
+
+function setUnrankedDischarge(
+  messages: Record<string, Message>
+): Record<string, Message> {
   const stopDischarge =
     Object.entries(messages)[Object.keys(messages).length - 1];
   if (stopDischarge[1].operation === Operation.StopDischarge) {
     delete messages[stopDischarge[0]];
   }
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
     const time = DateTime.fromISO(stopDischarge[0])
       .setZone('Europe/Stockholm')
       .plus({ hours: i });
@@ -214,15 +232,10 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   }
   const time = DateTime.fromISO(stopDischarge[0])
     .setZone('Europe/Stockholm')
-    .plus({ hours: 3 });
+    .plus({ hours: UNRANKED_DISCHARGE_HOURS });
   messages[time.toISO()] = {
     operation: Operation.StopDischarge,
   } as Message;
 
-  for (const [time, message] of Object.entries(messages)) {
-    context.log('Adding discharge message', time, JSON.stringify(message));
-    await enqueue(message, DateTime.fromISO(time));
-  }
-
-  await setRankings(rankingsArray);
+  return messages;
 }
