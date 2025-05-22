@@ -7,7 +7,6 @@ import {
 import { Message, Operation } from '../message';
 import {
   getBatterySoc,
-  getDailyLoad,
   setStartBatteryCharge,
   setStartBatteryDischarge,
   setStopBatteryCharge,
@@ -16,9 +15,7 @@ import {
 import { DateTime } from 'luxon';
 import { clearAllMessages, enqueue } from '../service-bus';
 import {
-  getDailyLoadAndTime,
   getRankings,
-  setDailyLoad,
   setLatestBatteryBalanceUpper,
   setLatestChargeSoc,
   setRankings,
@@ -26,7 +23,11 @@ import {
 import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 import { getPrices } from '../prices';
 import { getProductionForecast } from '../solcast';
-import { addToMessageWithRank, setUnrankedDischargeAfter } from '../util';
+import {
+  addToMessageWithRank,
+  getLoadHourlyMean,
+  setUnrankedDischargeAfter,
+} from '../util';
 
 const serviceBusName = 'battery-queue';
 
@@ -96,7 +97,7 @@ async function handleStartBatteryDischarge(
   context: InvocationContext
 ) {
   if (message.rank != null) {
-    const dailyLoad = await getDailyLoad();
+    const loadHourlyMean = await getLoadHourlyMean();
     const rankings = await getRankings();
     const rank = rankings.indexOf(message.rank);
     if (rank === -1) {
@@ -107,23 +108,6 @@ async function handleStartBatteryDischarge(
       const hasFutureDischargeWithLowerRank = rank > 0;
       const newRankings = rankings.filter((r) => r !== message.rank);
       await setRankings(newRankings);
-
-      const currentHour = DateTime.now().setZone('Europe/Stockholm').hour;
-
-      let loadHourlyMean;
-      if (currentHour > 6) {
-        loadHourlyMean = dailyLoad / currentHour;
-        await setDailyLoad(dailyLoad);
-      } else {
-        const dailyLoadSaved = await getDailyLoadAndTime();
-        const dailyLoadSavedHour = DateTime.fromISO(
-          dailyLoadSaved.time
-        ).setZone('Europe/Stockholm').hour;
-
-        loadHourlyMean =
-          (dailyLoad + dailyLoadSaved.load) /
-          (currentHour + dailyLoadSavedHour);
-      }
 
       const currentChargeSoc = await getBatterySoc();
       const dischargeCapacity = (currentChargeSoc - MIN_SOC) * BATTERY_CAPACITY;

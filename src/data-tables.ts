@@ -1,6 +1,5 @@
 import { AzureNamedKeyCredential, TableClient } from '@azure/data-tables';
 import { DateTime } from 'luxon';
-import { start } from 'repl';
 
 const account = process.env['AzureDataTableAccountName'];
 const accountKey = process.env['AzureDataTableAccountKey'];
@@ -85,7 +84,7 @@ export async function setForecast(
   });
 }
 
-export async function setDailyLoad(load: number) {
+export async function setLatestDailyLoads(load: number[]) {
   await _client.upsertEntity({
     partitionKey: TableKeys.DailyLoad,
     rowKey: '',
@@ -93,9 +92,9 @@ export async function setDailyLoad(load: number) {
   });
 }
 
-export async function getDailyLoadAndTime() {
+export async function getLatestDailyLoads(): Promise<number[]> {
   const entity = await _client.getEntity(TableKeys.DailyLoad, '');
-  return { load: parseFloat(entity.value as string), time: entity.timestamp };
+  return JSON.parse(entity.value as string);
 }
 
 export async function setRankings(rankings: number[]) {

@@ -1,12 +1,15 @@
 import {
   BATTERY_CAPACITY,
   CHARGE_ENERGY_PER_HOUR,
+  LOAD_HOURS_TO_SAVE,
   MIN_SOC,
   UNRANKED_DISCHARGE_HOURS,
 } from './consts';
+import { getLatestDailyLoads, setLatestDailyLoads } from './data-tables';
 import { Message, Operation } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
+import { getDailyLoad } from './sungrow-api';
 
 export function getNightChargeHours(prices: Price[]): Price[] {
   //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
@@ -224,4 +227,26 @@ export function setUnrankedDischargeAfter(messages: Record<string, Message>) {
   messages[time.toISO()] = {
     operation: Operation.StopDischarge,
   } as Message;
+}
+
+export async function addLoadToDailyLoad() {
+  const savedLoads = await getLatestDailyLoads();
+  const load = await getDailyLoad();
+  savedLoads.push(load);
+  if (savedLoads.length > LOAD_HOURS_TO_SAVE) {
+    savedLoads.splice(0, 1);
+  }
+  await setLatestDailyLoads(savedLoads);
+}
+
+export async function getLoadHourlyMean() {
+  const savedLoads = await getLatestDailyLoads();
+  let loadSums = 0;
+  for (let i = 1; i < savedLoads.length; i++) {
+    const prev = savedLoads[i - 1];
+    const curr = savedLoads[i];
+    // if new day add the new load, otherwise add the diff
+    loadSums += prev > curr ? curr : curr - prev;
+  }
+  return loadSums / (savedLoads.length - 1);
 }
