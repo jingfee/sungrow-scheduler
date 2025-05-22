@@ -23,10 +23,10 @@ import {
   setLatestChargeSoc,
   setRankings,
 } from '../data-tables';
-import { BATTERY_CAPACITY, MIN_SOC, UNRANKED_DISCHARGE_HOURS } from '../consts';
+import { BATTERY_CAPACITY, MIN_SOC } from '../consts';
 import { getPrices } from '../prices';
 import { getProductionForecast } from '../solcast';
-import { addToMessageWithRank } from '../util';
+import { addToMessageWithRank, setUnrankedDischargeAfter } from '../util';
 
 const serviceBusName = 'battery-queue';
 
@@ -205,7 +205,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
 
   // Only set unrankeddischarge if we have a startHour for the forecast
   if (forecast.startHour) {
-    messages = setUnrankedDischarge(messages);
+    setUnrankedDischargeAfter(messages);
   }
 
   for (const [time, message] of Object.entries(messages)) {
@@ -213,29 +213,4 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     await enqueue(message, DateTime.fromISO(time));
   }
   await setRankings(rankingsArray);
-}
-
-function setUnrankedDischarge(
-  messages: Record<string, Message>
-): Record<string, Message> {
-  const stopDischarge =
-    Object.entries(messages)[Object.keys(messages).length - 1];
-  if (stopDischarge[1].operation === Operation.StopDischarge) {
-    delete messages[stopDischarge[0]];
-  }
-
-  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
-    const time = DateTime.fromISO(stopDischarge[0])
-      .setZone('Europe/Stockholm')
-      .plus({ hours: i });
-    messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
-  }
-  const time = DateTime.fromISO(stopDischarge[0])
-    .setZone('Europe/Stockholm')
-    .plus({ hours: UNRANKED_DISCHARGE_HOURS });
-  messages[time.toISO()] = {
-    operation: Operation.StopDischarge,
-  } as Message;
-
-  return messages;
 }

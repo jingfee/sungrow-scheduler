@@ -15,6 +15,7 @@ import {
   addToMessageWithRank,
   getTargetSoc,
   isWinter,
+  setUnrankedDischargeBefore,
 } from '../util';
 import { getBatterySoc } from '../sungrow-api';
 import {
@@ -385,4 +386,7 @@ async function setDischargeAfterSolar(
   messages[solarEndTime.toISO()] = {
     operation: Operation.SetDischargeAfterSolar,
   } as Message;
+  if (forecast.endHour) {
+    setUnrankedDischargeBefore(messages, solarEndTime);
+  }
 }
