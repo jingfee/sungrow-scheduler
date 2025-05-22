@@ -67,36 +67,36 @@ async function handleFunction(context: InvocationContext) {
     `Forecast (kWh): ${forecast.energy}, (startHour): ${forecast.startHour}, (endHour): ${forecast.endHour}`
   );
 
-  const nightChargeHours = getNightChargeHours(prices);
-  const highestNightChargeHour = [...nightChargeHours].sort((a, b) =>
-    a.price < b.price ? 1 : -1
-  )[0].price;
-  let dischargeHours;
   if (isWinter()) {
+    const nightChargeHours = getNightChargeHours(prices);
+    const highestNightChargeHour = [...nightChargeHours].sort((a, b) =>
+      a.price < b.price ? 1 : -1
+    )[0].price;
+    let dischargeHours;
     dischargeHours = await setDayChargeAndDischarge(
       prices,
       highestNightChargeHour,
       chargeMessages,
       dischargeMessages
     );
-  }
 
-  if (!dischargeHours) {
-    dischargeHours = await setDayDischarge(
+    if (!dischargeHours) {
+      dischargeHours = await setDayDischarge(
+        prices,
+        highestNightChargeHour,
+        dischargeMessages
+      );
+    }
+
+    await setNightCharging(
       prices,
-      highestNightChargeHour,
-      dischargeMessages,
-      forecast
+      nightChargeHours,
+      dischargeHours,
+      chargeMessages
     );
+  } else {
+    await setDischargeAfterSolar(dischargeMessages, forecast);
   }
-
-  await setNightCharging(
-    prices,
-    nightChargeHours,
-    dischargeHours,
-    chargeMessages,
-    forecast.energy
-  );
 
   if (Object.keys(chargeMessages).length > 0) {
     await clearAllMessages([Operation.SetDischargeAfterSolar]);
@@ -126,8 +126,7 @@ async function setNightCharging(
   prices: Price[],
   chargeHours: Price[],
   dischargeHours: number,
-  messages: Record<string, Message>,
-  forecastEnergy: number
+  messages: Record<string, Message>
 ) {
   // get target_soc based on number of dischargehours, mean of chargehours and if at least 7 days since last balancing (100% charge)
   // calc charge amount from currentsoc, targetsoc and battery capacity
@@ -144,8 +143,7 @@ async function setNightCharging(
     prices,
     chargeHours,
     dischargeHours,
-    shouldBalanceBatteryUpper,
-    forecastEnergy
+    shouldBalanceBatteryUpper
   );
 
   const currentSoc = await getBatterySoc();
@@ -325,13 +323,7 @@ async function setDayChargeAndDischarge(
 async function setDayDischarge(
   prices: Price[],
   highestNightChargePrice: number,
-  messages: Record<string, Message>,
-  forecast: {
-    energy: number;
-    batteryEnergy: number;
-    startHour: DateTime;
-    endHour: DateTime;
-  }
+  messages: Record<string, Message>
 ) {
   //  find all hours between 06:00-22:00 SEK_THRESHOLD more expensive than highest charge price
   //  add message to bus to discharge at most expensive hours
@@ -362,31 +354,35 @@ async function setDayDischarge(
     a.time > b.time ? 1 : -1
   );
 
-  if (isWinter() || (forecast.energy && forecast.energy < 15)) {
-    await clearAllMessages([]);
-    addToMessageWithRank(
-      dischargeHoursDateSorted,
-      rankings,
-      messages,
-      {
-        operation: Operation.StartDischarge,
-      } as Message,
-      {
-        operation: Operation.StopDischarge,
-      } as Message
-    );
-  }
-
-  if (!isWinter() && forecast.batteryEnergy >= 10) {
-    const tomorrow = DateTime.now()
-      .setZone('Europe/Stockholm')
-      .plus({ days: 1 });
-    const endHour = Math.min(forecast.endHour ?? 18, 20);
-    const solarEndTime = tomorrow.set({ hour: endHour }).startOf('hour');
-    messages[solarEndTime.toISO()] = {
-      operation: Operation.SetDischargeAfterSolar,
-    } as Message;
-  }
+  await clearAllMessages([]);
+  addToMessageWithRank(
+    dischargeHoursDateSorted,
+    rankings,
+    messages,
+    {
+      operation: Operation.StartDischarge,
+    } as Message,
+    {
+      operation: Operation.StopDischarge,
+    } as Message
+  );
 
   return skipNightCharge ? 0 : dischargeHoursDateSorted.length;
+}
+
+async function setDischargeAfterSolar(
+  messages: Record<string, Message>,
+  forecast: {
+    energy: number;
+    batteryEnergy: number;
+    startHour: DateTime;
+    endHour: DateTime;
+  }
+) {
+  const tomorrow = DateTime.now().setZone('Europe/Stockholm').plus({ days: 1 });
+  const endHour = Math.min(forecast.endHour ?? 18, 20);
+  const solarEndTime = tomorrow.set({ hour: endHour }).startOf('hour');
+  messages[solarEndTime.toISO()] = {
+    operation: Operation.SetDischargeAfterSolar,
+  } as Message;
 }
