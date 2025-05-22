@@ -2,8 +2,6 @@ import { BATTERY_CAPACITY, CHARGE_ENERGY_PER_HOUR, MIN_SOC } from './consts';
 import { Message } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
-import { getProductionForecast } from './solcast';
-import { InvocationContext } from '@azure/functions';
 
 export function getNightChargeHours(prices: Price[]): Price[] {
   //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
@@ -63,8 +61,7 @@ export async function getTargetSoc(
   prices: Price[],
   chargingHours: Price[],
   dischargeHours: number,
-  shouldBalanceBatteryUpper: boolean,
-  forecastEnergy: number
+  shouldBalanceBatteryUpper: boolean
 ): Promise<number> {
   // if no dischargehours set targetsoc to 80% if cheap charging, else 40%
   // if dischargehours < 3 set targetsoc to 60%
@@ -124,24 +121,7 @@ export async function getTargetSoc(
     targetSoc = Math.max(0.3, targetSoc);
   }
 
-  if (!isWinter() && forecastEnergy) {
-    const maxSocFromForecast = await getMaxSocFromForecast(forecastEnergy);
-    targetSoc = Math.min(maxSocFromForecast, targetSoc);
-  }
-
   return targetSoc;
-}
-
-async function getMaxSocFromForecast(forecastEnergy: number) {
-  if (forecastEnergy >= 50) {
-    return 0.2;
-  } else if (forecastEnergy >= 35) {
-    return 0.4;
-  } else if (forecastEnergy >= 20) {
-    return 0.6;
-  } else {
-    return 0.8;
-  }
 }
 
 export function isWinter() {
