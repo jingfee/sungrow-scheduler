@@ -1,7 +1,7 @@
 export const SEK_THRESHOLD = 0.3;
 export const MIN_SOC = 0.2;
 export const BATTERY_CAPACITY = 0.95 * 25600;
-export const UNRANKED_DISCHARGE_HOURS = 3;
+export const UNRANKED_DISCHARGE_HOURS = 2;
 export const LOAD_HOURS_TO_SAVE = 8;
 // TODO: ADAPT THIS BASED ON WEATHER/PREVIOUS LOAD
 export const CHARGE_ENERGY_PER_HOUR = 3000;
