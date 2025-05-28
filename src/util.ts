@@ -193,7 +193,7 @@ export function setUnrankedDischargeBefore(
   messages: Record<string, Message>,
   dischargeStartTime: DateTime
 ) {
-  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
+  for (let i = -1 * UNRANKED_DISCHARGE_HOURS; i < 0; i++) {
     const time = dischargeStartTime
       .setZone('Europe/Stockholm')
       .plus({ hours: i });

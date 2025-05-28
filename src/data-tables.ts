@@ -88,7 +88,7 @@ export async function setLatestDailyLoads(load: number[]) {
   await _client.upsertEntity({
     partitionKey: TableKeys.DailyLoad,
     rowKey: '',
-    value: load.toString(),
+    value: JSON.stringify(load),
   });
 }
 

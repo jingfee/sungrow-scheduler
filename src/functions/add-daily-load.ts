@@ -22,12 +22,12 @@ export async function addDailyLoadHttp(
   return { body: 'Complete' };
 }
 
-app.timer('charge-discharge-schedule', {
+app.timer('add-daily-load', {
   schedule: '0 55 * * * *',
   handler: addDailyLoad,
 });
 
-/* app.http('charge-discharge-schedule-debug', {
+/* app.http('add-daily-load-debug', {
   methods: ['GET'],
   handler: chargeDischargeScheduleHttp,
 }); */
