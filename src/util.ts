@@ -202,7 +202,7 @@ export function setUnrankedDischargeBefore(
   // Stop-message 1 minute before to avoid conflict with setdischargeaftersolar-message
   const time = dischargeStartTime
     .setZone('Europe/Stockholm')
-    .plus({ hours: UNRANKED_DISCHARGE_HOURS, minutes: -1 });
+    .plus({ minutes: -1 });
   messages[time.toISO()] = {
     operation: Operation.StopDischarge,
   } as Message;
