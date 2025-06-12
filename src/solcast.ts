@@ -7,16 +7,16 @@ export async function getProductionForecast(
 ): Promise<{
   energy: number;
   batteryEnergy: number;
-  startHour: number;
-  endHour: number;
+  startTime: DateTime;
+  endTime: DateTime;
 }> {
   const solcastResponse = await fetchSolcast();
   if (!solcastResponse) {
     return {
       energy: undefined,
       batteryEnergy: undefined,
-      startHour: undefined,
-      endHour: undefined,
+      startTime: undefined,
+      endTime: undefined,
     };
   }
 
@@ -50,25 +50,25 @@ export async function getProductionForecast(
       filteredForecasts[filteredProducingHours.length - 1]
     }`
   );
-  const startHour =
+  const startTime =
     filteredForecasts.length > 0
       ? DateTime.fromISO(filteredProducingHours[0].period_end).setZone(
           'Europe/Stockholm'
-        ).hour
+        )
       : undefined;
-  const endHour =
+  const endTime =
     filteredForecasts.length > 0
       ? DateTime.fromISO(
           filteredProducingHours[filteredProducingHours.length - 1].period_end
-        ).setZone('Europe/Stockholm').hour - 1
+        ).setZone('Europe/Stockholm') - 1
       : undefined;
 
-  context.log(`Solcast start hour: ${startHour}`);
-  context.log(`Solcast end hour: ${endHour}`);
+  context.log(`Solcast start time: ${startTime}`);
+  context.log(`Solcast end time: ${endTime}`);
 
-  await setForecast(energy, batteryEnergy, startHour, endHour);
+  await setForecast(energy, batteryEnergy, startTime, endTime);
 
-  return { energy, batteryEnergy, startHour, endHour };
+  return { energy, batteryEnergy, startTime, endTime };
 }
 
 async function fetchSolcast() {

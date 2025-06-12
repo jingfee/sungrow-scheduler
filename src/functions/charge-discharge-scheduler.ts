@@ -65,7 +65,7 @@ async function handleFunction(context: InvocationContext) {
   const prices = await getPrices();
   const forecast = await getProductionForecast(context);
   context.log(
-    `Forecast (kWh): ${forecast.energy}, (startHour): ${forecast.startHour}, (endHour): ${forecast.endHour}`
+    `Forecast (kWh): ${forecast.energy}, (startTime): ${forecast.startTime}, (endTime): ${forecast.endTime}`
   );
 
   if (isWinter()) {
@@ -376,17 +376,19 @@ async function setDischargeAfterSolar(
   forecast: {
     energy: number;
     batteryEnergy: number;
-    startHour: DateTime;
-    endHour: DateTime;
+    startTime: DateTime;
+    endTime: DateTime;
   }
 ) {
   const tomorrow = DateTime.now().setZone('Europe/Stockholm').plus({ days: 1 });
-  const endHour = Math.min(forecast.endHour ?? 18, 20);
-  const solarEndTime = tomorrow.set({ hour: endHour }).startOf('hour');
-  messages[solarEndTime.toISO()] = {
+  const endTime = DateTime.min(
+    forecast.endTime ?? tomorrow.set({ hour: 18 }),
+    tomorrow.set({ hour: 20 })
+  );
+  messages[endTime.toISO()] = {
     operation: Operation.SetDischargeAfterSolar,
   } as Message;
-  if (forecast.endHour) {
-    setUnrankedDischargeBefore(messages, solarEndTime);
+  if (forecast.endTime) {
+    setUnrankedDischargeBefore(messages, endTime);
   }
 }
