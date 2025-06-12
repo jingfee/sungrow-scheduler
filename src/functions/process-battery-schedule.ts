@@ -186,6 +186,7 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     } as Message
   );
   const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
+  await setRankings(rankingsArray);
 
   // Only set unrankeddischarge if we have a startHour for the forecast
   if (forecast.startHour) {
@@ -196,5 +197,4 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
     context.log('Adding discharge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
-  await setRankings(rankingsArray);
 }

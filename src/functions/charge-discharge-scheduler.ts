@@ -107,19 +107,21 @@ async function handleFunction(context: InvocationContext) {
     context.log('Adding charge message', time, JSON.stringify(message));
     await enqueue(message, DateTime.fromISO(time));
   }
-  for (const [time, message] of Object.entries(dischargeMessages)) {
-    context.log('Adding discharge message', time, JSON.stringify(message));
-    await enqueue(message, DateTime.fromISO(time));
-  }
+
   const rankings = [
     ...Array(
       Object.values(dischargeMessages).filter(
-        (m) => m.operation === Operation.StartDischarge
+        (m) => m.operation === Operation.StartDischarge && m.rank != null
       ).length
     ).keys(),
   ];
   if (rankings.length > 0) {
     await setRankings(rankings);
+  }
+
+  for (const [time, message] of Object.entries(dischargeMessages)) {
+    context.log('Adding discharge message', time, JSON.stringify(message));
+    await enqueue(message, DateTime.fromISO(time));
   }
 }
 
