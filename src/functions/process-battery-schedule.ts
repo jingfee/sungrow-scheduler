@@ -25,7 +25,7 @@ import { getPrices } from '../prices';
 import { getProductionForecast } from '../solcast';
 import {
   addToMessageWithRank,
-  getLoadHourlyMean,
+  getLoadQuarterlyMean,
   setUnrankedDischargeAfter,
 } from '../util';
 
@@ -97,7 +97,7 @@ async function handleStartBatteryDischarge(
   context: InvocationContext
 ) {
   if (message.rank != null) {
-    const loadHourlyMean = await getLoadHourlyMean();
+    const loadQuarterlyMean = await getLoadQuarterlyMean();
     const rankings = await getRankings();
     const rank = rankings.indexOf(message.rank);
     if (rank === -1) {
@@ -112,10 +112,10 @@ async function handleStartBatteryDischarge(
       const currentChargeSoc = await getBatterySoc();
       const dischargeCapacity = (currentChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
 
-      const hours = Math.round(dischargeCapacity / loadHourlyMean);
+      const quarters = Math.round(dischargeCapacity / loadQuarterlyMean);
 
-      context.log(`Rank: ${rank} Hours: ${hours}`);
-      if (rank != undefined && rank >= hours) {
+      context.log(`Rank: ${rank} Quarters: ${quarters}`);
+      if (rank != undefined && rank >= quarters) {
         if (hasFutureDischargeWithLowerRank) {
           return;
         }
@@ -126,9 +126,12 @@ async function handleStartBatteryDischarge(
   context.log('Starting discharge');
   const now = DateTime.now().setZone('Europe/Stockholm');
   const startHour = now.hour;
-  let endHour = now.plus({ hours: 1 }).hour;
+  const startMinute = now.minute;
+  const endTime = now.plus({ minutes: 15 });
+  let endHour = endTime.hour;
   endHour = endHour === 0 ? 24 : endHour;
-  await setStartBatteryDischarge(startHour, endHour);
+  const endMinute = endTime.minute;
+  await setStartBatteryDischarge(startHour, startMinute, endHour, endMinute);
 }
 
 async function handleStopBatteryDischarge() {
@@ -149,33 +152,39 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
   const prices = await getPrices();
   const forecast = await getProductionForecast(context);
 
-  if (!forecast.startHour) {
+  if (!forecast.startTime) {
     context.log(
-      'No starthour, either there was an error fetching forecast or upcoming production doesnt reach the threshold, ranked discharge until 09:00'
+      'No starttime, either there was an error fetching forecast or upcoming production doesnt reach the threshold, ranked discharge until 09:00'
     );
   }
+  const forecastStartTime = DateTime.fromISO(forecast.startTime);
 
   const now = DateTime.now().setZone('Europe/Stockholm');
 
-  const dischargeEndHour = Math.min(forecast.startHour ?? 9, 9);
+  const dischargeEndHour = Math.min(forecastStartTime.hour ?? 9, 9);
+  const dischargeEndMinute =
+    forecastStartTime.hour > 9 ? 0 : forecastStartTime.minute;
 
-  const dischargeHoursPriceSorted = prices
-    .slice(now.hour, 24 + dischargeEndHour)
+  const dischargeQuartersPriceSorted = prices
+    .slice(
+      now.hour * 4 + (now.minute >= 30 ? 2 : 0),
+      24 * 4 + dischargeEndHour * 4 + (dischargeEndMinute === 30 ? 2 : 0)
+    )
     .filter((p) => p.price >= -0.2)
     .sort((a, b) => (a.price < b.price ? 1 : -1));
 
   const rankings: Record<string, number> = {};
-  for (const [index, hour] of dischargeHoursPriceSorted.entries()) {
-    rankings[hour.time] = index;
+  for (const [index, price] of dischargeQuartersPriceSorted.entries()) {
+    rankings[price.time] = index;
   }
 
-  const dischargeHoursDateSorted = [...dischargeHoursPriceSorted].sort((a, b) =>
-    a.time > b.time ? 1 : -1
+  const dischargeQuartersDateSorted = [...dischargeQuartersPriceSorted].sort(
+    (a, b) => (a.time > b.time ? 1 : -1)
   );
 
   let messages: Record<string, Message> = {};
   addToMessageWithRank(
-    dischargeHoursDateSorted,
+    dischargeQuartersDateSorted,
     rankings,
     messages,
     {
@@ -185,11 +194,11 @@ async function handleSetDischargeAfterSolar(context: InvocationContext) {
       operation: Operation.StopDischarge,
     } as Message
   );
-  const rankingsArray = [...Array(dischargeHoursDateSorted.length).keys()];
+  const rankingsArray = [...Array(dischargeQuartersDateSorted.length).keys()];
   await setRankings(rankingsArray);
 
   // Only set unrankeddischarge if we have a startHour for the forecast
-  if (forecast.startHour) {
+  if (forecast.startTime) {
     setUnrankedDischargeAfter(messages);
   }
 
