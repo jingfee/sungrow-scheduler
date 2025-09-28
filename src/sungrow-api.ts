@@ -182,24 +182,34 @@ export async function setStopBatteryCharge() {
 
 export async function setStartBatteryDischarge(
   startHour: number,
-  endHour: number
+  startMinute: number,
+  endHour: number,
+  endMinute: number
 ) {
   const taskName = `${DateTime.now()
     .setZone('Europe/Stockholm')
     .toISO()} Set start battery discharge`;
-  await setBatteryDischargeEndTime(endHour, `${taskName} end`);
-  await setBatteryDischargeStartTime(startHour, `${taskName} start`);
+  await setBatteryDischargeEndTime(endHour, endMinute, `${taskName} end`);
+  await setBatteryDischargeStartTime(
+    startHour,
+    startMinute,
+    `${taskName} start`
+  );
 }
 
 export async function setStopBatteryDischarge() {
   const taskName = `${DateTime.now()
     .setZone('Europe/Stockholm')
     .toISO()} Set stop battery discharge`;
-  await setBatteryDischargeStartTime(0, `${taskName} start`);
-  await setBatteryDischargeEndTime(0, `${taskName} end`);
+  await setBatteryDischargeStartTime(0, 0, `${taskName} start`);
+  await setBatteryDischargeEndTime(0, 0, `${taskName} end`);
 }
 
-async function setBatteryDischargeStartTime(hour: number, taskName: string) {
+async function setBatteryDischargeStartTime(
+  hour: number,
+  minute: number,
+  taskName: string
+) {
   if (!token) {
     await login();
   }
@@ -220,6 +230,10 @@ async function setBatteryDischargeStartTime(hour: number, taskName: string) {
         param_code: isWeekend ? 10057 : 10048, //discharging start time 1: hour
         set_value: hour,
       },
+      {
+        param_code: isWeekend ? 10058 : 10049, //discharging start time 1: minute
+        set_value: minute,
+      },
     ],
   });
   const options = { ...baseOptions, body };
@@ -231,7 +245,11 @@ async function setBatteryDischargeStartTime(hour: number, taskName: string) {
   }
 }
 
-async function setBatteryDischargeEndTime(hour: number, taskName: string) {
+async function setBatteryDischargeEndTime(
+  hour: number,
+  minute: number,
+  taskName: string
+) {
   if (!token) {
     await login();
   }
@@ -251,6 +269,10 @@ async function setBatteryDischargeEndTime(hour: number, taskName: string) {
       {
         param_code: isWeekend ? 10059 : 10050, //weekday discharging end time 1: hour
         set_value: hour,
+      },
+      {
+        param_code: isWeekend ? 10060 : 10051, //discharging start time 1: minute
+        set_value: minute,
       },
     ],
   });

@@ -1,9 +1,9 @@
 import {
   BATTERY_CAPACITY,
-  CHARGE_ENERGY_PER_HOUR,
-  LOAD_HOURS_TO_SAVE,
+  CHARGE_ENERGY_PER_QUARTER,
+  LOAD_QUARTERS_TO_SAVE,
   MIN_SOC,
-  UNRANKED_DISCHARGE_HOURS,
+  UNRANKED_DISCHARGE_QUARTERS,
 } from './consts';
 import { getLatestDailyLoads, setLatestDailyLoads } from './data-tables';
 import { Message, Operation } from './message';
@@ -11,78 +11,91 @@ import { Price } from './prices';
 import { DateTime } from 'luxon';
 import { getDailyLoad } from './sungrow-api';
 
-export function getNightChargeHours(prices: Price[]): Price[] {
+export function getNightChargeQuarters(prices: Price[]): Price[] {
   //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
   //  if any mean over cheapest hours is less than 10 öre, always charge those hours
   //  charge 6 hours if diff avg6 and avg4 less than 10 öre
   //  charge 5 hours if diff avg5 and avg4 less than 5 öre
   //  else charge 4 hours
 
-  const maxChargeHours = 6;
+  const maxChargeQuarters = 6 * 4; // 6 hours, 4 quarters per hour
 
-  let chargingHours = 0;
+  let chargingQuarters = 0;
 
-  const sortedHours = prices
-    .slice(22, 30) // 22:00 to 06:00 next day
+  const sortedQuarters = prices
+    .slice(22 * 4, 30 * 4) // 22:00 to 06:00 next day
     .sort((a, b) => (a.price > b.price ? 1 : -1));
 
   const nightlyMeans = {
-    2: sortedHours.slice(0, 2).reduce((a, b) => a + b.price, 0) / 2,
-    3: sortedHours.slice(0, 3).reduce((a, b) => a + b.price, 0) / 3,
-    4: sortedHours.slice(0, 4).reduce((a, b) => a + b.price, 0) / 4,
-    5: sortedHours.slice(0, 5).reduce((a, b) => a + b.price, 0) / 5,
-    6: sortedHours.slice(0, 6).reduce((a, b) => a + b.price, 0) / 6,
+    2:
+      sortedQuarters.slice(0, 2 * 4).reduce((a, b) => a + b.price, 0) / (2 * 4),
+    3:
+      sortedQuarters.slice(0, 3 * 4).reduce((a, b) => a + b.price, 0) / (3 * 4),
+    4:
+      sortedQuarters.slice(0, 4 * 4).reduce((a, b) => a + b.price, 0) / (4 * 4),
+    5:
+      sortedQuarters.slice(0, 5 * 4).reduce((a, b) => a + b.price, 0) / (5 * 4),
+    6:
+      sortedQuarters.slice(0, 6 * 4).reduce((a, b) => a + b.price, 0) / (6 * 4),
   };
 
   // Price during night is cheap - charge no matter what
-  for (let hour = maxChargeHours; hour <= maxChargeHours - 2; hour--) {
-    if (sortedHours[hour - 1].price < 0.1) {
-      chargingHours = hour;
+  for (
+    let quarter = maxChargeQuarters;
+    quarter <= maxChargeQuarters - 2 * 4;
+    quarter--
+  ) {
+    if (sortedQuarters[quarter - 1].price < 0.1) {
+      chargingQuarters = quarter;
       break;
     }
   }
 
-  if (chargingHours === 0) {
+  if (chargingQuarters === 0) {
     // small diff during night - charge 4 hours
-    if (nightlyMeans[maxChargeHours] - nightlyMeans[maxChargeHours - 2] < 0.1) {
-      chargingHours = maxChargeHours;
+    if (
+      nightlyMeans[maxChargeQuarters] - nightlyMeans[maxChargeQuarters - 2] <
+      0.1
+    ) {
+      chargingQuarters = maxChargeQuarters;
       // mid diff during night - charge 3 hours
     } else if (
-      nightlyMeans[maxChargeHours - 1] - nightlyMeans[maxChargeHours - 2] <
+      nightlyMeans[maxChargeQuarters - 1] -
+        nightlyMeans[maxChargeQuarters - 2] <
       0.05
     ) {
-      chargingHours = maxChargeHours - 1;
+      chargingQuarters = maxChargeQuarters - 4;
       // higher diff during night - charge 2 hours
     } else {
-      chargingHours = maxChargeHours - 2;
+      chargingQuarters = maxChargeQuarters - 8;
     }
   }
 
-  const chargeHours = sortedHours
-    .slice(0, chargingHours)
+  const chargeQuarters = sortedQuarters
+    .slice(0, chargingQuarters)
     .sort((a, b) => (a.time > b.time ? 1 : -1));
 
-  return chargeHours;
+  return chargeQuarters;
 }
 
 export async function getTargetSoc(
   prices: Price[],
-  chargingHours: Price[],
-  dischargeHours: number,
+  chargingQuarters: Price[],
+  dischargeQuarters: number,
   shouldBalanceBatteryUpper: boolean
 ): Promise<number> {
-  // if no dischargehours set targetsoc to 80% if cheap charging, else 40%
-  // if dischargehours < 3 set targetsoc to 60%
+  // if no dischargequartesr set targetsoc to 80% if cheap charging, else 40%
+  // if dischargequarters < 3*4 set targetsoc to 60%
   // if balance battery set targetsoc 100%
-  // targetsoc 99% if diff most expensive and cheapest hour is more than 75 öre
-  // targetsoc 98% if diff most expensive and cheapest hour is less than 75 öre
+  // targetsoc 99% if diff most expensive and cheapest quarter is more than 75 öre
+  // targetsoc 98% if diff most expensive and cheapest quarter is less than 75 öre
 
   let targetSoc = 0;
 
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
-  if (dischargeHours > 0) {
-    const energyPerHour = CHARGE_ENERGY_PER_HOUR;
-    const totalEnergy = energyPerHour * dischargeHours;
+  if (dischargeQuarters > 0) {
+    const energyPerQuarter = CHARGE_ENERGY_PER_QUARTER;
+    const totalEnergy = energyPerQuarter * dischargeQuarters;
     targetSoc = Math.min(
       (BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY,
       1
@@ -93,20 +106,24 @@ export async function getTargetSoc(
       if (shouldBalanceBatteryUpper) {
         targetSoc = 1;
       } else {
-        // mean of tomorrows 3 cheapest hours
+        // mean of tomorrows 12 cheapest quarters
         const meanCheapest =
-          prices
-            .slice(24)
+          (prices
+            .slice(24 * 4)
             .sort((a, b) => (a.price > b.price ? 1 : -1))
-            .slice(0, 3)
-            .reduce((a, b) => a + b.price, 0) / 3;
-        // mean of tomorrows 7 most expensive hours
+            .slice(0, 3 * 4)
+            .reduce((a, b) => a + b.price, 0) /
+            3) *
+          4;
+        // mean of tomorrows 28 most expensive quarters
         const meanMostExpensive =
-          prices
-            .slice(24)
+          (prices
+            .slice(24 * 4)
             .sort((a, b) => (a.price < b.price ? 1 : -1))
-            .slice(0, 7)
-            .reduce((a, b) => a + b.price, 0) / 7;
+            .slice(0, 7 * 4)
+            .reduce((a, b) => a + b.price, 0) /
+            7) *
+          4;
 
         const diffLowHighPrice = meanMostExpensive - meanCheapest;
 
@@ -119,10 +136,10 @@ export async function getTargetSoc(
     }
   }
 
-  const chargingHoursMean =
-    chargingHours.reduce((a, b) => a + b.price, 0) / chargingHours.length;
+  const chargingQuartersMean =
+    chargingQuarters.reduce((a, b) => a + b.price, 0) / chargingQuarters.length;
   // if we charge during night due to low prices set soc to 80%
-  if (chargingHoursMean < 0.1) {
+  if (chargingQuartersMean < 0.1) {
     targetSoc = Math.max(0.8, targetSoc);
     // else set soc to 30% to keep a backup in case of outage
   } else {
@@ -132,58 +149,58 @@ export async function getTargetSoc(
   return targetSoc;
 }
 
-export function isWinter() {
+export function isSummer() {
   const now = DateTime.now().setZone('Europe/Stockholm');
-  return [1, 2, 11, 12].includes(now.month);
+  return [4, 5, 6, 7, 8].includes(now.month);
 }
 
 export function addToMessage(
-  hours: Price[],
+  prices: Price[],
   messages: Record<string, Message>,
   startMessage: Message,
   stopMessage: Message
 ) {
-  for (const [index, chargeHour] of hours.entries()) {
-    const currDate = DateTime.fromISO(chargeHour.time);
+  for (const [index, price] of prices.entries()) {
+    const currDate = DateTime.fromISO(price.time);
     const prevDate =
-      index === 0 ? undefined : DateTime.fromISO(hours[index - 1].time);
+      index === 0 ? undefined : DateTime.fromISO(prices[index - 1].time);
     const nextDate =
-      index === hours.length - 1
+      index === prices.length - 1
         ? undefined
-        : DateTime.fromISO(hours[index + 1].time);
+        : DateTime.fromISO(prices[index + 1].time);
 
-    if (!prevDate || currDate.plus({ hours: -1 }) > prevDate) {
-      messages[DateTime.fromISO(chargeHour.time).toISO()] = startMessage;
+    if (!prevDate || currDate.plus({ minutes: -15 }) > prevDate) {
+      messages[DateTime.fromISO(price.time).toISO()] = startMessage;
     }
 
-    if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
-      messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] =
+    if (!nextDate || currDate.plus({ minutes: 15 }) < nextDate) {
+      messages[DateTime.fromISO(price.time).plus({ minutes: 15 }).toISO()] =
         stopMessage;
     }
   }
 }
 
 export function addToMessageWithRank(
-  hoursDateSorted: Price[],
+  prices: Price[],
   rankings: Record<string, number>,
   messages: Record<string, Message>,
   startMessage: Message,
   stopMessage: Message
 ) {
-  for (const [index, chargeHour] of hoursDateSorted.entries()) {
-    const currDate = DateTime.fromISO(chargeHour.time);
+  for (const [index, price] of prices.entries()) {
+    const currDate = DateTime.fromISO(price.time);
     const nextDate =
-      index === hoursDateSorted.length - 1
+      index === prices.length - 1
         ? undefined
-        : DateTime.fromISO(hoursDateSorted[index + 1].time);
+        : DateTime.fromISO(prices[index + 1].time);
 
-    messages[DateTime.fromISO(chargeHour.time).toISO()] = {
+    messages[DateTime.fromISO(price.time).toISO()] = {
       ...startMessage,
-      rank: rankings[chargeHour.time],
+      rank: rankings[price.time],
     } as Message;
 
-    if (!nextDate || currDate.plus({ hours: 1 }) < nextDate) {
-      messages[DateTime.fromISO(chargeHour.time).plus({ hours: 1 }).toISO()] =
+    if (!nextDate || currDate.plus({ minutes: 15 }) < nextDate) {
+      messages[DateTime.fromISO(price.time).plus({ minutes: 15 }).toISO()] =
         stopMessage;
     }
   }
@@ -193,11 +210,13 @@ export function setUnrankedDischargeBefore(
   messages: Record<string, Message>,
   dischargeStartTime: DateTime
 ) {
-  for (let i = -1 * UNRANKED_DISCHARGE_HOURS; i < 0; i++) {
+  for (let i = -1 * UNRANKED_DISCHARGE_QUARTERS; i < 0; i++) {
     const time = dischargeStartTime
       .setZone('Europe/Stockholm')
-      .plus({ hours: i });
-    messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
+      .plus({ minutes: i * 15 });
+    messages[time.toISO()] = {
+      operation: Operation.StartDischarge,
+    } as Message;
   }
   // Stop-message 1 minute before to avoid conflict with setdischargeaftersolar-message
   const time = dischargeStartTime
@@ -215,15 +234,15 @@ export function setUnrankedDischargeAfter(messages: Record<string, Message>) {
     delete messages[stopDischarge[0]];
   }
 
-  for (let i = 0; i < UNRANKED_DISCHARGE_HOURS; i++) {
+  for (let i = 0; i < UNRANKED_DISCHARGE_QUARTERS; i++) {
     const time = DateTime.fromISO(stopDischarge[0])
       .setZone('Europe/Stockholm')
-      .plus({ hours: i });
+      .plus({ minutes: i * 15 });
     messages[time.toISO()] = { operation: Operation.StartDischarge } as Message;
   }
   const time = DateTime.fromISO(stopDischarge[0])
     .setZone('Europe/Stockholm')
-    .plus({ hours: UNRANKED_DISCHARGE_HOURS });
+    .plus({ minutes: UNRANKED_DISCHARGE_QUARTERS * 15 });
   messages[time.toISO()] = {
     operation: Operation.StopDischarge,
   } as Message;
@@ -233,13 +252,13 @@ export async function addLoadToDailyLoad() {
   const savedLoads = await getLatestDailyLoads();
   const load = await getDailyLoad();
   savedLoads.push(load);
-  if (savedLoads.length > LOAD_HOURS_TO_SAVE) {
+  if (savedLoads.length > LOAD_QUARTERS_TO_SAVE) {
     savedLoads.splice(0, 1);
   }
   await setLatestDailyLoads(savedLoads);
 }
 
-export async function getLoadHourlyMean() {
+export async function getLoadQuarterlyMean() {
   const savedLoads = await getLatestDailyLoads();
   let loadSums = 0;
   for (let i = 1; i < savedLoads.length; i++) {
