@@ -151,7 +151,14 @@ export async function getTargetSoc(
 
 export function isSummer() {
   const now = DateTime.now().setZone('Europe/Stockholm');
-  return [4, 5, 6, 7, 8].includes(now.month);
+
+  if ([5, 6, 7, 8].includes(now.month)) {
+    return true;
+  } else if (now.month === 4) {
+    return now.day >= 10;
+  } else {
+    return false;
+  }
 }
 
 export function addToMessage(

@@ -125,7 +125,7 @@ async function setNightCharging(
 ) {
   // get target_soc based on number of dischargequarters, mean of chargequarters and if at least 7 days since last balancing (100% charge)
   // calc charge amount from currentsoc, targetsoc and battery capacity
-  // calc chargingpower based on chargeamount and chargequarters, add 15% to accomodate load cap - if under 800w remove most expensive quarter until above 800w
+  // calc chargingpower based on chargeamount and chargequarters, add 10% to accomodate load cap - if under 800w remove most expensive quarter until above 800w
 
   const latestBalanceUpper = await getLatestBatteryBalanceUpper();
   const diff = DateTime.now()
@@ -150,8 +150,7 @@ async function setNightCharging(
   }
 
   let chargingPower =
-    Math.ceil(((chargeAmount / (chargeQuarters.length / 4)) * 1.15) / 100) *
-    100;
+    Math.ceil(((chargeAmount / (chargeQuarters.length / 4)) * 1.1) / 100) * 100;
   while (chargeQuarters.length > 1) {
     if (chargingPower < 800) {
       chargeQuarters = chargeQuarters
