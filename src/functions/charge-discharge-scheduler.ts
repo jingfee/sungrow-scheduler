@@ -89,6 +89,12 @@ async function handleFunction(context: InvocationContext) {
       dischargeQuarters,
       chargeMessages
     );
+
+    const now = DateTime.now().setZone('Europe/Stockholm');
+    now.set({ minute: 59 });
+    dischargeMessages[now.toISO()] = {
+      operation: Operation.StopDischarge,
+    } as Message;
   }
 
   if (Object.keys(chargeMessages).length > 0) {
