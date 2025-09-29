@@ -84,7 +84,9 @@ export async function setForecast(
   });
 }
 
-export async function setLatestDailyLoads(load: number[]) {
+export async function setLatestDailyLoads(
+  load: { value: number; timestamp: string }[]
+) {
   await _client.upsertEntity({
     partitionKey: TableKeys.DailyLoad,
     rowKey: '',
@@ -92,7 +94,9 @@ export async function setLatestDailyLoads(load: number[]) {
   });
 }
 
-export async function getLatestDailyLoads(): Promise<number[]> {
+export async function getLatestDailyLoads(): Promise<
+  { value: number; timestamp: string }[]
+> {
   const entity = await _client.getEntity(TableKeys.DailyLoad, '');
   return JSON.parse(entity.value as string);
 }

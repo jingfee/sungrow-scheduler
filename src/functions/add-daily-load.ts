@@ -23,7 +23,7 @@ export async function addDailyLoadHttp(
 }
 
 app.timer('add-daily-load', {
-  schedule: '0 10,25,40,55 * * * *',
+  schedule: '0 55 * * * *',
   handler: addDailyLoad,
 });
 

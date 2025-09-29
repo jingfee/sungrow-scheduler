@@ -1,7 +1,6 @@
 import {
   BATTERY_CAPACITY,
-  CHARGE_ENERGY_PER_QUARTER,
-  LOAD_QUARTERS_TO_SAVE,
+  LOAD_HOURS_TO_SAVE,
   MIN_SOC,
   UNRANKED_DISCHARGE_QUARTERS,
 } from './consts';
@@ -27,10 +26,6 @@ export function getNightChargeQuarters(prices: Price[]): Price[] {
     .sort((a, b) => (a.price > b.price ? 1 : -1));
 
   const nightlyMeans = {
-    2:
-      sortedQuarters.slice(0, 2 * 4).reduce((a, b) => a + b.price, 0) / (2 * 4),
-    3:
-      sortedQuarters.slice(0, 3 * 4).reduce((a, b) => a + b.price, 0) / (3 * 4),
     4:
       sortedQuarters.slice(0, 4 * 4).reduce((a, b) => a + b.price, 0) / (4 * 4),
     5:
@@ -52,20 +47,13 @@ export function getNightChargeQuarters(prices: Price[]): Price[] {
   }
 
   if (chargingQuarters === 0) {
-    // small diff during night - charge 4 hours
-    if (
-      nightlyMeans[maxChargeQuarters] - nightlyMeans[maxChargeQuarters - 2] <
-      0.1
-    ) {
+    // small diff during night - charge 6 hours
+    if (nightlyMeans[6] - nightlyMeans[4] < 0.1) {
       chargingQuarters = maxChargeQuarters;
-      // mid diff during night - charge 3 hours
-    } else if (
-      nightlyMeans[maxChargeQuarters - 1] -
-        nightlyMeans[maxChargeQuarters - 2] <
-      0.05
-    ) {
+      // mid diff during night - charge 5 hours
+    } else if (nightlyMeans[5] - nightlyMeans[4] < 0.05) {
       chargingQuarters = maxChargeQuarters - 4;
-      // higher diff during night - charge 2 hours
+      // higher diff during night - charge 4 hours
     } else {
       chargingQuarters = maxChargeQuarters - 8;
     }
@@ -94,7 +82,7 @@ export async function getTargetSoc(
 
   // Low diff between nightly prices and daily prices -> skip day discharge and set targetSoc accordingly
   if (dischargeQuarters > 0) {
-    const energyPerQuarter = CHARGE_ENERGY_PER_QUARTER;
+    const energyPerQuarter = await getLoadQuarterlyMean();
     const totalEnergy = energyPerQuarter * dischargeQuarters;
     targetSoc = Math.min(
       (BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY,
@@ -138,12 +126,13 @@ export async function getTargetSoc(
 
   const chargingQuartersMean =
     chargingQuarters.reduce((a, b) => a + b.price, 0) / chargingQuarters.length;
-  // if we charge during night due to low prices set soc to 80%
-  if (chargingQuartersMean < 0.1) {
-    targetSoc = Math.max(0.8, targetSoc);
-    // else set soc to 30% to keep a backup in case of outage
-  } else {
-    targetSoc = Math.max(0.3, targetSoc);
+  // if we charge during night due to low prices set soc to min 80%
+  // else set soc to min 30% to keep a backup in case of outage
+  targetSoc = Math.max(chargingQuartersMean < 0.1 ? 0.8 : 0.3, targetSoc);
+
+  if (!isWinter()) {
+    // if not winter - charge to max 80% since we will get some sun the next day as well
+    targetSoc = Math.min(0.8, targetSoc);
   }
 
   return targetSoc;
@@ -156,6 +145,20 @@ export function isSummer() {
     return true;
   } else if (now.month === 4) {
     return now.day >= 10;
+  } else {
+    return false;
+  }
+}
+
+export function isWinter() {
+  const now = DateTime.now().setZone('Europe/Stockholm');
+
+  if ([11, 12, 1, 2].includes(now.month)) {
+    return true;
+  } else if (now.month === 10) {
+    return now.day >= 10;
+  } else if (now.month === 3) {
+    return now.day < 10;
   } else {
     return false;
   }
@@ -256,10 +259,11 @@ export function setUnrankedDischargeAfter(messages: Record<string, Message>) {
 }
 
 export async function addLoadToDailyLoad() {
+  const now = DateTime.now().setZone('Europe/Stockholm');
   const savedLoads = await getLatestDailyLoads();
   const load = await getDailyLoad();
-  savedLoads.push(load);
-  if (savedLoads.length > LOAD_QUARTERS_TO_SAVE) {
+  savedLoads.push({ value: load, timestamp: now.toISO() });
+  if (savedLoads.length > LOAD_HOURS_TO_SAVE) {
     savedLoads.splice(0, 1);
   }
   await setLatestDailyLoads(savedLoads);
@@ -267,12 +271,16 @@ export async function addLoadToDailyLoad() {
 
 export async function getLoadQuarterlyMean() {
   const savedLoads = await getLatestDailyLoads();
-  let loadSums = 0;
-  for (let i = 1; i < savedLoads.length; i++) {
-    const prev = savedLoads[i - 1];
-    const curr = savedLoads[i];
-    // if new day add the new load, otherwise add the diff
-    loadSums += prev > curr ? curr : curr - prev;
-  }
-  return loadSums / (savedLoads.length - 1);
+  const first = savedLoads[0];
+  const last = savedLoads[savedLoads.length - 1];
+
+  const firstDateTime = DateTime.fromISO(first.timestamp);
+  const lastDateTime = DateTime.fromISO(last.timestamp);
+  const diffMinutes = lastDateTime.diff(firstDateTime, 'minutes').minutes;
+
+  const diffLoad = last.value - first.value;
+
+  const loadPerMinute = diffLoad / diffMinutes;
+
+  return Math.round(loadPerMinute * 15);
 }
