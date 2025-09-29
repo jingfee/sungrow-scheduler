@@ -278,9 +278,15 @@ export async function getLoadQuarterlyMean() {
   const lastDateTime = DateTime.fromISO(last.timestamp);
   const diffMinutes = lastDateTime.diff(firstDateTime, 'minutes').minutes;
 
-  const diffLoad = last.value - first.value;
+  let loadSums = 0;
+  for (let i = 1; i < savedLoads.length; i++) {
+    const prev = savedLoads[i - 1].value;
+    const curr = savedLoads[i].value;
+    // if new day add the new load, otherwise add the diff
+    loadSums += prev > curr ? curr : curr - prev;
+  }
 
-  const loadPerMinute = diffLoad / diffMinutes;
+  const loadPerMinute = loadSums / diffMinutes;
 
   return Math.round(loadPerMinute * 15);
 }
