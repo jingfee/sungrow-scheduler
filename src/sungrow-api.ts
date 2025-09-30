@@ -1,3 +1,4 @@
+import { InvocationContext } from '@azure/functions';
 import { DateTime } from 'luxon';
 
 const baseUrl = 'https://gateway.isolarcloud.eu/openapi';
@@ -94,7 +95,11 @@ export async function getDailyLoad() {
   }
 }
 
-export async function setStartBatteryCharge(power: number, targetSoc: number) {
+export async function setStartBatteryCharge(
+  power: number,
+  targetSoc: number,
+  context: InvocationContext
+) {
   if (!token) {
     await login();
   }
@@ -131,13 +136,14 @@ export async function setStartBatteryCharge(power: number, targetSoc: number) {
   const options = { ...baseOptions, body };
 
   try {
-    await fetch(url, options);
+    const response = await fetch(url, options);
+    context.log(response.json());
   } catch (error: any) {
     console.error(error.message);
   }
 }
 
-export async function setStopBatteryCharge() {
+export async function setStopBatteryCharge(context: InvocationContext) {
   if (!token) {
     await login();
   }
@@ -174,7 +180,8 @@ export async function setStopBatteryCharge() {
   const options = { ...baseOptions, body };
 
   try {
-    await fetch(url, options);
+    const response = await fetch(url, options);
+    context.log(response.json());
   } catch (error: any) {
     console.error(error.message);
   }
@@ -184,31 +191,39 @@ export async function setStartBatteryDischarge(
   startHour: number,
   startMinute: number,
   endHour: number,
-  endMinute: number
+  endMinute: number,
+  context: InvocationContext
 ) {
   const taskName = `${DateTime.now()
     .setZone('Europe/Stockholm')
     .toISO()} Set start battery discharge`;
-  await setBatteryDischargeEndTime(endHour, endMinute, `${taskName} end`);
+  await setBatteryDischargeEndTime(
+    endHour,
+    endMinute,
+    `${taskName} end`,
+    context
+  );
   await setBatteryDischargeStartTime(
     startHour,
     startMinute,
-    `${taskName} start`
+    `${taskName} start`,
+    context
   );
 }
 
-export async function setStopBatteryDischarge() {
+export async function setStopBatteryDischarge(context: InvocationContext) {
   const taskName = `${DateTime.now()
     .setZone('Europe/Stockholm')
     .toISO()} Set stop battery discharge`;
-  await setBatteryDischargeStartTime(0, 0, `${taskName} start`);
-  await setBatteryDischargeEndTime(0, 0, `${taskName} end`);
+  await setBatteryDischargeStartTime(0, 0, `${taskName} start`, context);
+  await setBatteryDischargeEndTime(0, 0, `${taskName} end`, context);
 }
 
 async function setBatteryDischargeStartTime(
   hour: number,
   minute: number,
-  taskName: string
+  taskName: string,
+  context: InvocationContext
 ) {
   if (!token) {
     await login();
@@ -239,7 +254,8 @@ async function setBatteryDischargeStartTime(
   const options = { ...baseOptions, body };
 
   try {
-    await fetch(url, options);
+    const response = await fetch(url, options);
+    context.log(response.json());
   } catch (error: any) {
     console.error(error.message);
   }
@@ -248,7 +264,8 @@ async function setBatteryDischargeStartTime(
 async function setBatteryDischargeEndTime(
   hour: number,
   minute: number,
-  taskName: string
+  taskName: string,
+  context: InvocationContext
 ) {
   if (!token) {
     await login();
@@ -279,7 +296,8 @@ async function setBatteryDischargeEndTime(
   const options = { ...baseOptions, body };
 
   try {
-    await fetch(url, options);
+    const response = await fetch(url, options);
+    context.log(response.json());
   } catch (error: any) {
     console.error(error.message);
   }

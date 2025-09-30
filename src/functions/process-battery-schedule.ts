@@ -64,16 +64,16 @@ async function handleFunction(message: Message, context: InvocationContext) {
   context.log('Handling message', JSON.stringify(message));
   switch (message.operation) {
     case Operation.StartCharge:
-      await handleStartBatteryCharge(message);
+      await handleStartBatteryCharge(message, context);
       break;
     case Operation.StopCharge:
-      await handleStopBatteryCharge(message);
+      await handleStopBatteryCharge(message, context);
       break;
     case Operation.StartDischarge:
       await handleStartBatteryDischarge(message, context);
       break;
     case Operation.StopDischarge:
-      await handleStopBatteryDischarge();
+      await handleStopBatteryDischarge(context);
       break;
     case Operation.SetDischargeAfterSolar:
       await handleSetDischargeAfterSolar(context);
@@ -81,13 +81,19 @@ async function handleFunction(message: Message, context: InvocationContext) {
   }
 }
 
-async function handleStartBatteryCharge(message: Message) {
-  await setStartBatteryCharge(message.power, message.targetSoc);
+async function handleStartBatteryCharge(
+  message: Message,
+  context: InvocationContext
+) {
+  await setStartBatteryCharge(message.power, message.targetSoc, context);
 }
 
-async function handleStopBatteryCharge(message: Message) {
+async function handleStopBatteryCharge(
+  message: Message,
+  context: InvocationContext
+) {
   const soc = await getBatterySoc();
-  await setStopBatteryCharge();
+  await setStopBatteryCharge(context);
 
   await setLatestChargeSoc(soc * message.targetSoc);
 }
@@ -131,11 +137,17 @@ async function handleStartBatteryDischarge(
   let endHour = endTime.hour;
   endHour = endHour === 0 ? 24 : endHour;
   const endMinute = endTime.minute;
-  await setStartBatteryDischarge(startHour, startMinute, endHour, endMinute);
+  await setStartBatteryDischarge(
+    startHour,
+    startMinute,
+    endHour,
+    endMinute,
+    context
+  );
 }
 
-async function handleStopBatteryDischarge() {
-  await setStopBatteryDischarge();
+async function handleStopBatteryDischarge(context: InvocationContext) {
+  await setStopBatteryDischarge(context);
 }
 
 async function handleSetDischargeAfterSolar(context: InvocationContext) {
