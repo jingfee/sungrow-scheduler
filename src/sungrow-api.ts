@@ -137,7 +137,7 @@ export async function setStartBatteryCharge(
 
   try {
     const response = await fetch(url, options);
-    context.log(response.json());
+    context.log(await response.json());
   } catch (error: any) {
     console.error(error.message);
   }
@@ -181,7 +181,7 @@ export async function setStopBatteryCharge(context: InvocationContext) {
 
   try {
     const response = await fetch(url, options);
-    context.log(response.json());
+    context.log(await response.json());
   } catch (error: any) {
     console.error(error.message);
   }
@@ -255,7 +255,7 @@ async function setBatteryDischargeStartTime(
 
   try {
     const response = await fetch(url, options);
-    context.log(response.json());
+    context.log(await response.json());
   } catch (error: any) {
     console.error(error.message);
   }
@@ -297,7 +297,7 @@ async function setBatteryDischargeEndTime(
 
   try {
     const response = await fetch(url, options);
-    context.log(response.json());
+    context.log(await response.json());
   } catch (error: any) {
     console.error(error.message);
   }
