@@ -137,7 +137,11 @@ export async function setStartBatteryCharge(
 
   try {
     const response = await fetch(url, options);
-    context.log(JSON.stringify(await response.json()));
+    const parsedJsonResponse = await response.json();
+    await getParameterQuery(
+      parsedJsonResponse?.result_data?.dev_result_list[0].task_id,
+      context
+    );
   } catch (error: any) {
     console.error(error.message);
   }
@@ -181,7 +185,11 @@ export async function setStopBatteryCharge(context: InvocationContext) {
 
   try {
     const response = await fetch(url, options);
-    context.log(JSON.stringify(await response.json()));
+    const parsedJsonResponse = await response.json();
+    await getParameterQuery(
+      parsedJsonResponse?.result_data?.dev_result_list[0].task_id,
+      context
+    );
   } catch (error: any) {
     console.error(error.message);
   }
@@ -255,7 +263,11 @@ async function setBatteryDischargeStartTime(
 
   try {
     const response = await fetch(url, options);
-    context.log(JSON.stringify(await response.json()));
+    const parsedJsonResponse = await response.json();
+    await getParameterQuery(
+      parsedJsonResponse?.result_data?.dev_result_list[0].task_id,
+      context
+    );
   } catch (error: any) {
     console.error(error.message);
   }
@@ -292,6 +304,37 @@ async function setBatteryDischargeEndTime(
         set_value: minute,
       },
     ],
+  });
+  const options = { ...baseOptions, body };
+
+  try {
+    const response = await fetch(url, options);
+    const parsedJsonResponse = await response.json();
+    await getParameterQuery(
+      parsedJsonResponse?.result_data?.dev_result_list[0].task_id,
+      context
+    );
+  } catch (error: any) {
+    console.error(error.message);
+  }
+}
+
+async function getParameterQuery(taskId: string, context: InvocationContext) {
+  if (!taskId) {
+    context.log('No taskid to query');
+    return;
+  }
+
+  if (!token) {
+    await login();
+  }
+
+  const url = `${baseUrl}/getParamSettingTask`;
+  const body = JSON.stringify({
+    ...baseBody,
+    token,
+    task_id: taskId,
+    uuid: process.env['DeviceUuid'],
   });
   const options = { ...baseOptions, body };
 

@@ -30,9 +30,13 @@ export async function getProductionForecast(
       +now.plus({ days: 2 }).startOf('day') > +time.startOf('day')
     );
   });
-  context.log(`Solcast first tomorrow: ${filteredForecasts[0]}`);
   context.log(
-    `Solcast last tomorrow: ${filteredForecasts[filteredForecasts.length - 1]}`
+    `Solcast first tomorrow: ${JSON.stringify(filteredForecasts[0])}`
+  );
+  context.log(
+    `Solcast last tomorrow: ${JSON.stringify(
+      filteredForecasts[filteredForecasts.length - 1]
+    )}`
   );
   for (const forecast of filteredForecasts) {
     energy += 0.5 * forecast.pv_estimate;
@@ -44,11 +48,13 @@ export async function getProductionForecast(
   const filteredProducingHours = filteredForecasts.filter(
     (r) => r.pv_estimate >= 1.5
   );
-  context.log(`Solcast first producing: ${filteredProducingHours[0]}`);
   context.log(
-    `Solcast last producing: ${
+    `Solcast first producing: ${JSON.stringify(filteredProducingHours[0])}`
+  );
+  context.log(
+    `Solcast last producing: ${JSON.stringify(
       filteredForecasts[filteredProducingHours.length - 1]
-    }`
+    )}`
   );
   const startTime =
     filteredForecasts.length > 0
@@ -60,7 +66,9 @@ export async function getProductionForecast(
     filteredForecasts.length > 0
       ? DateTime.fromISO(
           filteredProducingHours[filteredProducingHours.length - 1].period_end
-        ).setZone('Europe/Stockholm') - 1
+        )
+          .setZone('Europe/Stockholm')
+          .plus({ hours: -1 })
       : undefined;
 
   context.log(`Solcast start time: ${startTime}`);
