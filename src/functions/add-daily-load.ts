@@ -6,7 +6,6 @@ import {
   Timer,
 } from '@azure/functions';
 import { addLoadToDailyLoad } from '../util';
-import { instrumentFunction } from '..';
 
 export async function addDailyLoad(
   myTimer: Timer,
@@ -23,18 +22,9 @@ export async function addDailyLoadHttp(
   return { body: 'Complete' };
 }
 
-const instrumentedAddDailyLoad = instrumentFunction(
-  'addDailyLoadTimer',
-  addDailyLoad
-);
-const instrumentedAddDailyLoadHttp = instrumentFunction(
-  'addDailyLoadHttp',
-  addDailyLoadHttp
-);
-
 app.timer('add-daily-load', {
   schedule: '0 55 * * * *',
-  handler: instrumentedAddDailyLoad,
+  handler: addDailyLoad,
 });
 
 /* app.http('add-daily-load-debug', {
