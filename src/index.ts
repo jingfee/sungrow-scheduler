@@ -13,6 +13,7 @@ import {
 } from '@opentelemetry/sdk-logs';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { trace } from '@opentelemetry/api';
 
 // 1. Detect environment resources (service.name, cloud info, etc.)
 const resource = detectResources();
@@ -30,7 +31,7 @@ loggerProvider.addLogRecordProcessor(
   new SimpleLogRecordProcessor(new AzureMonitorLogExporter())
 );
 
-// 4. Register instrumentations
+// 4. Register instrumentations (auto + Service Bus, HTTP, etc.)
 registerInstrumentations({
   tracerProvider,
   loggerProvider,
@@ -39,3 +40,30 @@ registerInstrumentations({
     new AzureFunctionsInstrumentation(),
   ],
 });
+
+// 5. Global wrapper for all functions (Timer trigger not covered by instrumentation)
+export function instrumentFunction<T extends (...args: any[]) => any>(
+  name: string,
+  fn: T
+): T {
+  const tracer = trace.getTracer('functions');
+
+  return async function (...args: any[]) {
+    const context = args[0];
+    const span = tracer.startSpan(name, {
+      attributes: {
+        'faas.execution': context?.invocationId,
+      },
+    });
+
+    try {
+      return await fn(...args);
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: 2, message: (err as Error).message });
+      throw err;
+    } finally {
+      span.end();
+    }
+  } as T;
+}

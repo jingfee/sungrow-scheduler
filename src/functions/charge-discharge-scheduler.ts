@@ -27,6 +27,7 @@ import {
 } from '../data-tables';
 import { BATTERY_CAPACITY, MIN_SOC, SEK_THRESHOLD } from '../consts';
 import { getProductionForecast } from '../solcast';
+import { instrumentFunction } from '..';
 
 export async function chargeDischargeSchedule(
   myTimer: Timer,
@@ -43,14 +44,23 @@ export async function chargeDischargeScheduleHttp(
   return { body: 'Schedule complete' };
 }
 
+const instrumentedChargeDischargeSchedule = instrumentFunction(
+  'chargeDischargeScheduleTimer',
+  chargeDischargeSchedule
+);
+const instrumentedChargeDischargeScheduleHttp = instrumentFunction(
+  'chargeDischargeScheduleHttp',
+  chargeDischargeScheduleHttp
+);
+
 app.timer('charge-discharge-schedule', {
   schedule: '0 55 19 * * *',
-  handler: chargeDischargeSchedule,
+  handler: instrumentedChargeDischargeSchedule,
 });
 
 /* app.http('charge-discharge-schedule-debug', {
   methods: ['GET'],
-  handler: chargeDischargeScheduleHttp,
+  handler: instrumentedChargeDischargeScheduleHttp,
 }); */
 
 async function handleFunction(context: InvocationContext) {
