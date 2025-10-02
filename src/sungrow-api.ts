@@ -117,7 +117,7 @@ export async function setStartBatteryCharge(
     param_list: [
       {
         param_code: 10001, //soc upper limit
-        set_value: Math.max(targetSoc, 50) * 1000,
+        set_value: Math.max(targetSoc * 1000, 700),
       },
       {
         param_code: 10003, //energy management mode
