@@ -25,7 +25,7 @@ import {
   setLatestNightChargeHighPrice,
   setRankings,
 } from '../data-tables';
-import { BATTERY_CAPACITY, MIN_SOC, SEK_THRESHOLD } from '../consts';
+import { BATTERY_CAPACITY, SEK_THRESHOLD } from '../consts';
 import { getProductionForecast } from '../solcast';
 
 export async function chargeDischargeSchedule(
@@ -54,22 +54,26 @@ app.timer('charge-discharge-schedule', {
 }); */
 
 async function handleFunction(context: InvocationContext) {
-  await clearAllMessages([Operation.StartDischarge, Operation.StopDischarge]);
+  //await clearAllMessages([Operation.StartDischarge, Operation.StopDischarge]);
   const chargeMessages: Record<string, Message> = {};
   const dischargeMessages: Record<string, Message> = {};
   const prices = await getPrices();
-  const forecast = await getProductionForecast(context);
-  context.log(
-    `Forecast (kWh): ${forecast.energy}, (startTime): ${forecast.startTime}, (endTime): ${forecast.endTime}`
-  );
 
   if (isSummer()) {
+    const forecast = await getProductionForecast(context);
+    context.log(
+      `Forecast (kWh): ${forecast.energy}, (startTime): ${forecast.startTime}, (endTime): ${forecast.endTime}`
+    );
     await setDischargeAfterSolar(dischargeMessages, forecast);
   } else {
     const nightChargeQuarters = getNightChargeQuarters(prices);
+    context.log(
+      `Number of nightly charge quarters: ${nightChargeQuarters.length}`
+    );
     const highestNightChargeQuarter = [...nightChargeQuarters].sort((a, b) =>
       a.price < b.price ? 1 : -1
     )[0].price;
+    context.log(`Highest night charge price: ${highestNightChargeQuarter}`);
     // dischargeQuarters = await setDayChargeAndDischarge(
     //   prices,
     //   highestNightChargeQuarter,
@@ -82,6 +86,8 @@ async function handleFunction(context: InvocationContext) {
       highestNightChargeQuarter,
       dischargeMessages
     );
+
+    context.log(`Number of discharge quarters: ${dischargeQuarters}`);
 
     await setNightCharging(
       prices,

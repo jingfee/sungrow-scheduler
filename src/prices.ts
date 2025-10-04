@@ -42,29 +42,8 @@ async function fetchPrices(date: DateTime) {
       return;
     }
 
-    const responseJson = await response.json();
-    if (responseJson.length === 24) {
-      return padQuarterly(responseJson);
-    } else {
-      return responseJson;
-    }
+    return await response.json();
   } catch (error: any) {
     console.error(error.message);
   }
-}
-
-function padQuarterly(prices) {
-  const quarterlyPrices = [];
-
-  for (const price of prices) {
-    const timeStart = DateTime.fromISO(price.time_start);
-    for (let i = 0; i <= 45; i += 15) {
-      quarterlyPrices.push({
-        ...price,
-        time_start: timeStart.plus({ minutes: i }),
-      });
-    }
-  }
-
-  return quarterlyPrices;
 }
