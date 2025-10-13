@@ -67,7 +67,6 @@ export function getNightChargeQuarters(prices: Price[]): Price[] {
 }
 
 export async function getTargetSoc(
-  prices: Price[],
   chargingQuarters: Price[],
   dischargeQuarters: number,
   shouldBalanceBatteryUpper: boolean
@@ -85,42 +84,15 @@ export async function getTargetSoc(
     const energyPerQuarter = await getLoadQuarterlyMean();
     const totalEnergy = energyPerQuarter * dischargeQuarters;
     targetSoc = Math.min(
-      (BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY,
+      Math.ceil(
+        ((BATTERY_CAPACITY * MIN_SOC + totalEnergy) / BATTERY_CAPACITY) * 100
+      ) / 100,
       1
     );
 
     if (targetSoc >= 1) {
       // charge to 100% saturday -> sunday
-      if (shouldBalanceBatteryUpper) {
-        targetSoc = 1;
-      } else {
-        // mean of tomorrows 12 cheapest quarters
-        const meanCheapest =
-          (prices
-            .slice(24 * 4)
-            .sort((a, b) => (a.price > b.price ? 1 : -1))
-            .slice(0, 3 * 4)
-            .reduce((a, b) => a + b.price, 0) /
-            3) *
-          4;
-        // mean of tomorrows 28 most expensive quarters
-        const meanMostExpensive =
-          (prices
-            .slice(24 * 4)
-            .sort((a, b) => (a.price < b.price ? 1 : -1))
-            .slice(0, 7 * 4)
-            .reduce((a, b) => a + b.price, 0) /
-            7) *
-          4;
-
-        const diffLowHighPrice = meanMostExpensive - meanCheapest;
-
-        if (diffLowHighPrice > 0.75) {
-          targetSoc = 0.99;
-        } else {
-          targetSoc = 0.98;
-        }
-      }
+      targetSoc = shouldBalanceBatteryUpper ? 1 : 0.99;
     }
   }
 

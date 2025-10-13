@@ -118,7 +118,7 @@ async function handleStartBatteryDischarge(
       const currentChargeSoc = await getBatterySoc();
       const dischargeCapacity = (currentChargeSoc - MIN_SOC) * BATTERY_CAPACITY;
 
-      const quarters = Math.round(dischargeCapacity / loadQuarterlyMean);
+      const quarters = Math.ceil(dischargeCapacity / loadQuarterlyMean);
 
       context.log(`Rank: ${rank} Quarters: ${quarters}`);
       if (rank != undefined && rank >= quarters) {

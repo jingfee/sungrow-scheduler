@@ -54,7 +54,7 @@ app.timer('charge-discharge-schedule', {
 }); */
 
 async function handleFunction(context: InvocationContext) {
-  //await clearAllMessages([Operation.StartDischarge, Operation.StopDischarge]);
+  await clearAllMessages([Operation.StartDischarge, Operation.StopDischarge]);
   const chargeMessages: Record<string, Message> = {};
   const dischargeMessages: Record<string, Message> = {};
   const prices = await getPrices();
@@ -90,7 +90,6 @@ async function handleFunction(context: InvocationContext) {
     context.log(`Number of discharge quarters: ${dischargeQuarters}`);
 
     await setNightCharging(
-      prices,
       nightChargeQuarters,
       dischargeQuarters,
       chargeMessages
@@ -130,7 +129,6 @@ async function handleFunction(context: InvocationContext) {
 }
 
 async function setNightCharging(
-  prices: Price[],
   chargeQuarters: Price[],
   dischargeQuarters: number,
   messages: Record<string, Message>
@@ -147,7 +145,6 @@ async function setNightCharging(
   const shouldBalanceBatteryUpper = Math.ceil(diff.days) >= 7;
 
   const targetSoc = await getTargetSoc(
-    prices,
     chargeQuarters,
     dischargeQuarters,
     shouldBalanceBatteryUpper
