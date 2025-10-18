@@ -168,12 +168,13 @@ async function setNightCharging(
         .sort((a, b) => (a.time > b.time ? 1 : -1));
 
       chargingPower =
-        Math.ceil(((chargeAmount / (chargeQuarters.length / 4)) * 1.2) / 100) *
+        Math.ceil(((chargeAmount / (chargeQuarters.length / 4)) * 1.15) / 100) *
         100;
     } else {
       break;
     }
   }
+  chargingPower = Math.max(chargingPower, 4800);
 
   if (targetSoc === 1) {
     await setLatestBatteryBalanceUpper(

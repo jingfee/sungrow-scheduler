@@ -21,7 +21,8 @@ export function getNightChargeQuarters(
   //  charge 5 hours if diff avg5 and avg4 less than 5 öre
   //  else charge 4 hours
 
-  const maxChargeQuarters = 6 * 4; // 6 hours, 4 quarters per hour
+  const maxChargeQuarters = 24; // 6 hours
+  const minChargeQuarters = 12; // 3 hours
 
   let chargingQuarters = 0;
 
@@ -32,7 +33,7 @@ export function getNightChargeQuarters(
   const nightlyMeans = {};
   const standardDeviations = {};
 
-  for (let i = 12; i <= 24; i++) {
+  for (let i = minChargeQuarters; i <= maxChargeQuarters; i++) {
     const subset = sortedQuarters.slice(0, i);
     const mean = subset.reduce((sum, q) => sum + q.price, 0) / subset.length;
     nightlyMeans[i] = mean;
@@ -47,27 +48,22 @@ export function getNightChargeQuarters(
   context.log(JSON.stringify(standardDeviations));
 
   // Price during night is cheap - charge no matter what
-  for (
-    let quarter = maxChargeQuarters;
-    quarter <= maxChargeQuarters - 2 * 4;
-    quarter--
-  ) {
-    if (sortedQuarters[quarter - 1].price < 0.1) {
-      chargingQuarters = quarter;
+  for (let i = maxChargeQuarters; i >= minChargeQuarters; i--) {
+    if (sortedQuarters.slice(0, i).every((q) => q.price <= 0.1)) {
+      chargingQuarters = i;
       break;
     }
   }
 
   if (chargingQuarters === 0) {
-    // small diff during night - charge 6 hours
-    if (nightlyMeans[24] - nightlyMeans[16] < 0.1) {
-      chargingQuarters = maxChargeQuarters;
-      // mid diff during night - charge 5 hours
-    } else if (nightlyMeans[20] - nightlyMeans[16] < 0.05) {
-      chargingQuarters = maxChargeQuarters - 4;
-      // higher diff during night - charge 4 hours
-    } else {
-      chargingQuarters = maxChargeQuarters - 8;
+    for (let i = maxChargeQuarters; i >= minChargeQuarters; i--) {
+      if (standardDeviations[i] <= 0.05) {
+        chargingQuarters = i;
+        break;
+      }
+    }
+    if (chargingQuarters === 0) {
+      chargingQuarters = minChargeQuarters;
     }
   }
 
