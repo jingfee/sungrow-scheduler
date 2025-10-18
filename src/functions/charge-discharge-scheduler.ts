@@ -174,7 +174,7 @@ async function setNightCharging(
       break;
     }
   }
-  chargingPower = Math.max(chargingPower, 4800);
+  chargingPower = Math.min(chargingPower, 4800);
 
   if (targetSoc === 1) {
     await setLatestBatteryBalanceUpper(
