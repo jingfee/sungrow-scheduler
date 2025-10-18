@@ -9,8 +9,12 @@ import { Message, Operation } from './message';
 import { Price } from './prices';
 import { DateTime } from 'luxon';
 import { getDailyLoad } from './sungrow-api';
+import { InvocationContext } from '@azure/functions';
 
-export function getNightChargeQuarters(prices: Price[]): Price[] {
+export function getNightChargeQuarters(
+  prices: Price[],
+  context: InvocationContext
+): Price[] {
   //  find cheapest 4, 5 and 6 hours between 22:00 - 06:00
   //  if any mean over cheapest hours is less than 10 öre, always charge those hours
   //  charge 6 hours if diff avg6 and avg4 less than 10 öre
@@ -25,14 +29,22 @@ export function getNightChargeQuarters(prices: Price[]): Price[] {
     .slice(22 * 4, 30 * 4) // 22:00 to 06:00 next day
     .sort((a, b) => (a.price > b.price ? 1 : -1));
 
-  const nightlyMeans = {
-    4:
-      sortedQuarters.slice(0, 4 * 4).reduce((a, b) => a + b.price, 0) / (4 * 4),
-    5:
-      sortedQuarters.slice(0, 5 * 4).reduce((a, b) => a + b.price, 0) / (5 * 4),
-    6:
-      sortedQuarters.slice(0, 6 * 4).reduce((a, b) => a + b.price, 0) / (6 * 4),
-  };
+  const nightlyMeans = {};
+  const standardDeviations = {};
+
+  for (let i = 12; i <= 24; i++) {
+    const subset = sortedQuarters.slice(0, i);
+    const mean = subset.reduce((sum, q) => sum + q.price, 0) / subset.length;
+    nightlyMeans[i] = mean;
+
+    const variance =
+      subset
+        .map((q) => Math.pow(q.price - mean, 2))
+        .reduce((sum, val) => sum + val, 0) / subset.length; // population stddev
+
+    standardDeviations[i] = Math.sqrt(variance);
+  }
+  context.log(JSON.stringify(standardDeviations));
 
   // Price during night is cheap - charge no matter what
   for (
@@ -48,10 +60,10 @@ export function getNightChargeQuarters(prices: Price[]): Price[] {
 
   if (chargingQuarters === 0) {
     // small diff during night - charge 6 hours
-    if (nightlyMeans[6] - nightlyMeans[4] < 0.1) {
+    if (nightlyMeans[24] - nightlyMeans[16] < 0.1) {
       chargingQuarters = maxChargeQuarters;
       // mid diff during night - charge 5 hours
-    } else if (nightlyMeans[5] - nightlyMeans[4] < 0.05) {
+    } else if (nightlyMeans[20] - nightlyMeans[16] < 0.05) {
       chargingQuarters = maxChargeQuarters - 4;
       // higher diff during night - charge 4 hours
     } else {

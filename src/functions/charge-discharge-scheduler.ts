@@ -66,7 +66,7 @@ async function handleFunction(context: InvocationContext) {
     );
     await setDischargeAfterSolar(dischargeMessages, forecast);
   } else {
-    const nightChargeQuarters = getNightChargeQuarters(prices);
+    const nightChargeQuarters = getNightChargeQuarters(prices, context);
     context.log(
       `Number of nightly charge quarters: ${nightChargeQuarters.length}`
     );
