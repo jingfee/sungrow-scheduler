@@ -44,7 +44,7 @@ export async function chargeDischargeScheduleHttp(
 }
 
 app.timer('charge-discharge-schedule', {
-  schedule: '0 55 19 * * *',
+  schedule: '0 55 20 * * *',
   handler: chargeDischargeSchedule,
 });
 
@@ -400,3 +400,4 @@ async function setDischargeAfterSolar(
     setUnrankedDischargeBefore(messages, endTime);
   }
 }
+
